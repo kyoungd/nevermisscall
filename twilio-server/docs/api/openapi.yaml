@@ -1,0 +1,474 @@
+openapi: 3.0.3
+info:
+  title: Twilio-Server API
+  description: Twilio webhook handler and TwiML response service for NeverMissCall platform
+  version: 1.0.0
+  contact:
+    name: NeverMissCall API Support
+    url: https://nevermisscall.com/support
+    email: api-support@nevermisscall.com
+
+servers:
+  - url: http://localhost:3701
+    description: Development server
+  - url: https://webhooks.nevermisscall.com
+    description: Production server
+
+tags:
+  - name: Webhooks
+    description: Twilio webhook endpoints
+  - name: Health
+    description: Service health monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check service health
+      description: Returns the health status of the Twilio server
+      operationId: getHealthStatus
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "OK"
+                timestamp: "2024-01-01T10:00:00Z"
+
+  /webhooks/twilio/call:
+    post:
+      tags:
+        - Webhooks
+      summary: Handle Twilio call webhook
+      description: Processes incoming call webhooks from Twilio and generates TwiML responses
+      operationId: handleCallWebhook
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TwilioCallWebhook'
+            examples:
+              ringing_call:
+                summary: Incoming ringing call
+                value:
+                  CallStatus: "ringing"
+                  From: "+12125551234"
+                  To: "+13105551234"
+                  CallSid: "CA1234567890abcdef"
+                  AccountSid: "AC1234567890abcdef"
+                  Direction: "inbound"
+              completed_call:
+                summary: Completed call
+                value:
+                  CallStatus: "completed"
+                  From: "+12125551234"
+                  To: "+13105551234"
+                  CallSid: "CA1234567890abcdef"
+                  CallDuration: "45"
+      responses:
+        '200':
+          description: TwiML response for call handling
+          content:
+            text/xml:
+              schema:
+                type: string
+                description: TwiML XML response
+              examples:
+                dial_response:
+                  summary: Dial command for ringing call
+                  value: |
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <Response>
+                      <Dial timeout="20" action="/webhooks/twilio/call/status/CA1234567890abcdef" method="POST">
+                        +1987654321
+                      </Dial>
+                    </Response>
+                empty_response:
+                  summary: Empty response for non-ringing calls
+                  value: |
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <Response>
+                    </Response>
+        '400':
+          description: Invalid webhook data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhooks/twilio/call/status/{callSid}:
+    post:
+      tags:
+        - Webhooks
+      summary: Handle call status webhook
+      description: Processes call status updates from Twilio dial attempts
+      operationId: handleCallStatusWebhook
+      parameters:
+        - name: callSid
+          in: path
+          required: true
+          description: Twilio Call SID
+          schema:
+            type: string
+          example: "CA1234567890abcdef"
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TwilioCallStatusWebhook'
+            examples:
+              no_answer:
+                summary: Call not answered
+                value:
+                  DialCallStatus: "no-answer"
+                  From: "+12125551234"
+                  CallSid: "CA1234567890abcdef"
+                  CallDuration: "0"
+              answered:
+                summary: Call answered
+                value:
+                  DialCallStatus: "answered"
+                  From: "+12125551234"
+                  CallSid: "CA1234567890abcdef"
+                  CallDuration: "180"
+      responses:
+        '200':
+          description: TwiML response for call status
+          content:
+            text/xml:
+              schema:
+                type: string
+                description: TwiML XML response
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Response>
+                </Response>
+        '400':
+          description: Invalid webhook data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /webhooks/twilio/sms:
+    post:
+      tags:
+        - Webhooks
+      summary: Handle Twilio SMS webhook
+      description: Processes incoming SMS messages from Twilio
+      operationId: handleSmsWebhook
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TwilioSmsWebhook'
+            example:
+              MessageSid: "SM1234567890abcdef"
+              From: "+12125551234"
+              To: "+13105551234"
+              Body: "I need help with a leaky faucet at 123 Main St"
+              NumMedia: "0"
+      responses:
+        '200':
+          description: TwiML response for SMS handling
+          content:
+            text/xml:
+              schema:
+                type: string
+                description: TwiML XML response
+              example: |
+                <?xml version="1.0" encoding="UTF-8"?>
+                <Response>
+                </Response>
+        '400':
+          description: Invalid webhook data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    TwilioCallWebhook:
+      type: object
+      required:
+        - CallStatus
+        - From
+        - To
+        - CallSid
+      properties:
+        CallStatus:
+          type: string
+          enum: [ringing, in-progress, completed, busy, no-answer, failed, canceled]
+          description: Current status of the call
+          example: "ringing"
+        From:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Phone number that initiated the call (E.164 format)
+          example: "+12125551234"
+        To:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Phone number that received the call (E.164 format)
+          example: "+13105551234"
+        CallSid:
+          type: string
+          description: Unique identifier for this call
+          example: "CA1234567890abcdef"
+        AccountSid:
+          type: string
+          description: Twilio Account SID
+          example: "AC1234567890abcdef"
+        Direction:
+          type: string
+          enum: [inbound, outbound-api, outbound-dial]
+          description: Direction of the call
+          example: "inbound"
+        CallDuration:
+          type: string
+          description: Duration of the call in seconds (for completed calls)
+          example: "45"
+        CallerName:
+          type: string
+          description: Caller's name if available
+          example: "John Smith"
+        CallerCity:
+          type: string
+          description: Caller's city if available
+          example: "Los Angeles"
+        CallerState:
+          type: string
+          description: Caller's state if available
+          example: "CA"
+        CallerZip:
+          type: string
+          description: Caller's ZIP code if available
+          example: "90210"
+        CallerCountry:
+          type: string
+          description: Caller's country if available
+          example: "US"
+
+    TwilioCallStatusWebhook:
+      type: object
+      required:
+        - DialCallStatus
+        - From
+        - CallSid
+      properties:
+        DialCallStatus:
+          type: string
+          enum: [answered, no-answer, busy, failed, canceled]
+          description: Status of the dial attempt
+          example: "no-answer"
+        From:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Phone number that initiated the original call
+          example: "+12125551234"
+        CallSid:
+          type: string
+          description: Unique identifier for this call
+          example: "CA1234567890abcdef"
+        CallDuration:
+          type: string
+          description: Duration of the call in seconds
+          example: "0"
+        DialCallDuration:
+          type: string
+          description: Duration of the dial attempt in seconds
+          example: "20"
+
+    TwilioSmsWebhook:
+      type: object
+      required:
+        - MessageSid
+        - From
+        - To
+        - Body
+      properties:
+        MessageSid:
+          type: string
+          description: Unique identifier for this message
+          example: "SM1234567890abcdef"
+        From:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Phone number that sent the message (E.164 format)
+          example: "+12125551234"
+        To:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Phone number that received the message (E.164 format)
+          example: "+13105551234"
+        Body:
+          type: string
+          maxLength: 1600
+          description: Text content of the message
+          example: "I need help with a leaky faucet at 123 Main St"
+        NumMedia:
+          type: string
+          description: Number of media attachments
+          example: "0"
+        AccountSid:
+          type: string
+          description: Twilio Account SID
+          example: "AC1234567890abcdef"
+        MessagingServiceSid:
+          type: string
+          description: Messaging Service SID if used
+          example: "MG1234567890abcdef"
+        FromCity:
+          type: string
+          description: Sender's city if available
+          example: "Los Angeles"
+        FromState:
+          type: string
+          description: Sender's state if available
+          example: "CA"
+        FromZip:
+          type: string
+          description: Sender's ZIP code if available
+          example: "90210"
+        FromCountry:
+          type: string
+          description: Sender's country if available
+          example: "US"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Service health status
+          example: "OK"
+        timestamp:
+          type: string
+          format: date-time
+          description: Current server timestamp
+          example: "2024-01-01T10:00:00Z"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Invalid webhook data"
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+  callbacks:
+    asCallServiceCallback:
+      '{$request.body#/webhook_url}/calls/incoming':
+        post:
+          summary: Notify as-call-service of incoming call
+          description: Called when a new call is received to notify the call processing service
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    call_sid:
+                      type: string
+                      example: "CA1234567890abcdef"
+                    from:
+                      type: string
+                      example: "+12125551234"
+                    to:
+                      type: string
+                      example: "+13105551234"
+                    tenant_id:
+                      type: string
+                      format: uuid
+                      example: "660e8400-e29b-41d4-a716-446655440001"
+                    call_status:
+                      type: string
+                      example: "ringing"
+                    direction:
+                      type: string
+                      example: "inbound"
+                    timestamp:
+                      type: string
+                      format: date-time
+                      example: "2024-01-01T10:00:00Z"
+          responses:
+            '200':
+              description: Call notification processed
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+
+    asCallServiceMissedCallback:
+      '{$request.body#/webhook_url}/calls/missed':
+        post:
+          summary: Notify as-call-service of missed call
+          description: Called when a call is missed to trigger SMS processing
+          requestBody:
+            required: true
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    call_sid:
+                      type: string
+                      example: "CA1234567890abcdef"
+                    call_status:
+                      type: string
+                      example: "no-answer"
+                    call_duration:
+                      type: integer
+                      example: 0
+                    end_time:
+                      type: string
+                      format: date-time
+                      example: "2024-01-01T10:00:30Z"
+          responses:
+            '200':
+              description: Missed call notification processed
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+                        example: true
+
+security: []
