@@ -1,0 +1,1707 @@
+openapi: 3.0.3
+info:
+  title: Web-UI API
+  description: Next.js web dashboard API endpoints for business owners to manage calls, conversations, and settings
+  version: 1.0.0
+  contact:
+    name: NeverMissCall API Support
+    url: https://nevermisscall.com/support
+    email: api-support@nevermisscall.com
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server API
+  - url: https://app.nevermisscall.com/api
+    description: Production server API
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Dashboard
+    description: Dashboard data and real-time updates
+  - name: Conversations
+    description: Conversation management and messaging
+  - name: Leads
+    description: Lead management and tracking
+  - name: Settings
+    description: User and business settings management
+  - name: Health
+    description: Web application health monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check web application health
+      description: Returns the health status of the web UI application
+      operationId: getWebUIHealth
+      responses:
+        '200':
+          description: Web application is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                timestamp: "2024-01-01T10:00:00Z"
+                version: "1.0.0"
+                uptime: 3600
+                backend_services:
+                  ts_auth_service: "healthy"
+                  as_call_service: "healthy"
+                  as_connection_service: "healthy"
+
+  /auth/session:
+    get:
+      tags:
+        - Authentication
+      summary: Get current session information
+      description: Returns current user session data for authenticated users
+      operationId: getCurrentSession
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Session information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+              example:
+                user:
+                  id: "550e8400-e29b-41d4-a716-446655440000"
+                  email: "john@smithplumbing.com"
+                  name: "John Smith"
+                  tenant_id: "660e8400-e29b-41d4-a716-446655440001"
+                  role: "owner"
+                tenant:
+                  id: "660e8400-e29b-41d4-a716-446655440001"
+                  business_name: "Smith Plumbing Services"
+                  business_phone: "+12135551234"
+                  onboarding_completed: true
+                expires: "2024-01-02T10:00:00Z"
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Session validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /dashboard/stats:
+    get:
+      tags:
+        - Dashboard
+      summary: Get dashboard statistics
+      description: Returns real-time dashboard statistics for the authenticated tenant
+      operationId: getDashboardStats
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Dashboard statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DashboardStatsResponse'
+              example:
+                stats:
+                  calls_today: 12
+                  missed_calls_today: 8
+                  conversations_active: 3
+                  leads_generated: 6
+                  ai_active_count: 1
+                  human_active_count: 2
+                  response_rate: 0.85
+                  last_updated: "2024-01-01T10:05:00Z"
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /conversations:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversations for authenticated tenant
+      description: Returns paginated list of conversations for the current tenant
+      operationId: getConversations
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by conversation status
+          schema:
+            type: string
+            enum: [active, completed, abandoned]
+          example: "active"
+        - name: ai_active
+          in: query
+          required: false
+          description: Filter by AI active status
+          schema:
+            type: boolean
+          example: true
+        - name: limit
+          in: query
+          required: false
+          description: Number of conversations to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Number of conversations to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+      responses:
+        '200':
+          description: Conversations retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationsResponse'
+              example:
+                conversations:
+                  - id: "conv-550e8400-e29b-41d4-a716-446655440001"
+                    customer_phone: "+12125551234"
+                    last_message: "I need help with a leaky faucet at 123 Main St"
+                    last_message_at: "2024-01-01T10:01:00Z"
+                    message_count: 3
+                    status: "active"
+                    ai_active: true
+                    unread_count: 1
+                    created_at: "2024-01-01T10:00:00Z"
+                pagination:
+                  total: 1
+                  limit: 20
+                  offset: 0
+                  has_more: false
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /conversations/{conversationId}:
+    get:
+      tags:
+        - Conversations
+      summary: Get conversation details with messages
+      description: Returns detailed conversation information including all messages
+      operationId: getConversationDetails
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation identifier
+          schema:
+            type: string
+            format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '200':
+          description: Conversation details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailResponse'
+              example:
+                conversation:
+                  id: "conv-550e8400-e29b-41d4-a716-446655440001"
+                  customer_phone: "+12125551234"
+                  status: "active"
+                  ai_active: true
+                  ai_takeover_at: "2024-01-01T10:01:30Z"
+                  last_human_response_at: null
+                  created_at: "2024-01-01T10:00:00Z"
+                messages:
+                  - id: "msg-550e8400-e29b-41d4-a716-446655440001"
+                    direction: "outbound"
+                    body: "Hi! Sorry we missed your call at Smith Plumbing. How can we help?"
+                    sender: "system"
+                    timestamp: "2024-01-01T10:00:30Z"
+                    status: "delivered"
+                  - id: "msg-550e8400-e29b-41d4-a716-446655440002"
+                    direction: "inbound"
+                    body: "I need help with a leaky faucet at 123 Main St"
+                    sender: "customer"
+                    timestamp: "2024-01-01T10:01:00Z"
+                    status: "received"
+                lead:
+                  id: "lead-550e8400-e29b-41d4-a716-446655440002"
+                  customer_address: "123 Main St"
+                  job_type: "faucet_repair"
+                  urgency: "normal"
+                  status: "new"
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Unauthorized access to conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /conversations/{conversationId}/reply:
+    post:
+      tags:
+        - Conversations
+      summary: Send manual reply to conversation
+      description: Sends a manual message reply and takes over conversation from AI
+      operationId: sendConversationReply
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation identifier
+          schema:
+            type: string
+            format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendReplyRequest'
+            example:
+              message: "Thanks for reaching out! I can help with that faucet repair. What time works best for you tomorrow?"
+              takeover_from_ai: true
+      responses:
+        '200':
+          description: Reply sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendReplyResponse'
+              example:
+                success: true
+                message:
+                  id: "msg-550e8400-e29b-41d4-a716-446655440003"
+                  body: "Thanks for reaching out! I can help with that faucet repair..."
+                  direction: "outbound"
+                  sender: "human"
+                  timestamp: "2024-01-01T10:02:00Z"
+                  status: "sent"
+                conversation_updated:
+                  ai_active: false
+                  ai_deactivated_at: "2024-01-01T10:02:00Z"
+                  last_human_response_at: "2024-01-01T10:02:00Z"
+        '400':
+          description: Invalid reply request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Unauthorized access to conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: Error sending reply
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /conversations/{conversationId}/takeover:
+    post:
+      tags:
+        - Conversations
+      summary: Take over conversation from AI
+      description: Takes control of conversation from AI without sending a message
+      operationId: takeoverConversation
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: conversationId
+          in: path
+          required: true
+          description: Conversation identifier
+          schema:
+            type: string
+            format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+      responses:
+        '200':
+          description: Takeover completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TakeoverResponse'
+              example:
+                success: true
+                conversation:
+                  id: "conv-550e8400-e29b-41d4-a716-446655440001"
+                  ai_active: false
+                  ai_deactivated_at: "2024-01-01T10:02:30Z"
+                  human_active: true
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Unauthorized access to conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Conversation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: AI is not currently active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error taking over conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /leads:
+    get:
+      tags:
+        - Leads
+      summary: Get leads for authenticated tenant
+      description: Returns paginated list of leads with filtering and sorting options
+      operationId: getLeads
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Filter by lead status
+          schema:
+            type: string
+            enum: [new, qualified, appointment_scheduled, completed, lost]
+          example: "new"
+        - name: urgency
+          in: query
+          required: false
+          description: Filter by urgency level
+          schema:
+            type: string
+            enum: [low, normal, high, emergency]
+          example: "high"
+        - name: from_date
+          in: query
+          required: false
+          description: Filter leads created after this date
+          schema:
+            type: string
+            format: date-time
+          example: "2024-01-01T00:00:00Z"
+        - name: to_date
+          in: query
+          required: false
+          description: Filter leads created before this date
+          schema:
+            type: string
+            format: date-time
+          example: "2024-01-07T23:59:59Z"
+        - name: limit
+          in: query
+          required: false
+          description: Number of leads to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Number of leads to skip
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+        - name: sort
+          in: query
+          required: false
+          description: Sort order
+          schema:
+            type: string
+            enum: [created_at_asc, created_at_desc, urgency_desc, value_desc]
+            default: created_at_desc
+          example: "urgency_desc"
+      responses:
+        '200':
+          description: Leads retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadsResponse'
+              example:
+                leads:
+                  - id: "lead-550e8400-e29b-41d4-a716-446655440002"
+                    customer_phone: "+12125551234"
+                    customer_name: null
+                    customer_address: "123 Main St"
+                    job_type: "faucet_repair"
+                    urgency: "normal"
+                    estimated_value: 225.00
+                    status: "new"
+                    conversation_id: "conv-550e8400-e29b-41d4-a716-446655440001"
+                    created_at: "2024-01-01T10:01:00Z"
+                    updated_at: "2024-01-01T10:01:00Z"
+                pagination:
+                  total: 1
+                  limit: 20
+                  offset: 0
+                  has_more: false
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving leads
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /leads/{leadId}:
+    get:
+      tags:
+        - Leads
+      summary: Get lead details
+      description: Returns detailed information about a specific lead
+      operationId: getLeadDetails
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: leadId
+          in: path
+          required: true
+          description: Lead identifier
+          schema:
+            type: string
+            format: uuid
+          example: "lead-550e8400-e29b-41d4-a716-446655440002"
+      responses:
+        '200':
+          description: Lead details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadDetailResponse'
+              example:
+                lead:
+                  id: "lead-550e8400-e29b-41d4-a716-446655440002"
+                  customer_phone: "+12125551234"
+                  customer_name: null
+                  customer_address: "123 Main St"
+                  job_type: "faucet_repair"
+                  job_description: "Leaky faucet repair needed at residential property"
+                  urgency: "normal"
+                  estimated_value: 225.00
+                  status: "new"
+                  notes: []
+                  conversation_id: "conv-550e8400-e29b-41d4-a716-446655440001"
+                  created_at: "2024-01-01T10:01:00Z"
+                  updated_at: "2024-01-01T10:01:00Z"
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Unauthorized access to lead
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving lead
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Leads
+      summary: Update lead information
+      description: Updates lead status, notes, and other information
+      operationId: updateLead
+      security:
+        - sessionAuth: []
+      parameters:
+        - name: leadId
+          in: path
+          required: true
+          description: Lead identifier
+          schema:
+            type: string
+            format: uuid
+          example: "lead-550e8400-e29b-41d4-a716-446655440002"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateLeadRequest'
+            example:
+              status: "qualified"
+              customer_name: "John Smith"
+              estimated_value: 275.00
+              notes: "Customer confirmed faucet issue, scheduled for tomorrow morning"
+      responses:
+        '200':
+          description: Lead updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateLeadResponse'
+              example:
+                success: true
+                lead:
+                  id: "lead-550e8400-e29b-41d4-a716-446655440002"
+                  status: "qualified"
+                  customer_name: "John Smith"
+                  estimated_value: 275.00
+                  notes: "Customer confirmed faucet issue, scheduled for tomorrow morning"
+                  updated_at: "2024-01-01T11:00:00Z"
+        '400':
+          description: Invalid update data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Unauthorized access to lead
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Lead not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: Error updating lead
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /settings/business:
+    get:
+      tags:
+        - Settings
+      summary: Get business settings
+      description: Returns business configuration and operational settings
+      operationId: getBusinessSettings
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: Business settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BusinessSettingsResponse'
+              example:
+                settings:
+                  business_name: "Smith Plumbing Services"
+                  business_address: "123 Main St, Los Angeles, CA 90210"
+                  business_phone: "+12135551234"
+                  service_radius_miles: 25
+                  business_hours:
+                    start: "07:00"
+                    end: "18:00"
+                    timezone: "America/Los_Angeles"
+                  ai_settings:
+                    greeting_template: "Hi! Sorry we missed your call at {business_name}. How can we help?"
+                    ai_takeover_delay_seconds: 60
+                    basic_job_estimate_min: 150.00
+                    basic_job_estimate_max: 350.00
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving business settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Settings
+      summary: Update business settings
+      description: Updates business configuration and operational settings
+      operationId: updateBusinessSettings
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBusinessSettingsRequest'
+            example:
+              business_name: "Smith Plumbing & Heating"
+              service_radius_miles: 30
+              business_hours:
+                start: "08:00"
+                end: "17:00"
+              ai_settings:
+                greeting_template: "Hello! You've reached Smith Plumbing. We're busy helping another customer. What plumbing issue can we help with?"
+                ai_takeover_delay_seconds: 45
+      responses:
+        '200':
+          description: Business settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateBusinessSettingsResponse'
+              example:
+                success: true
+                settings:
+                  business_name: "Smith Plumbing & Heating"
+                  service_radius_miles: 30
+                  business_hours:
+                    start: "08:00"
+                    end: "17:00"
+                  updated_at: "2024-01-01T12:00:00Z"
+        '400':
+          description: Invalid settings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: Error updating business settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /settings/user:
+    get:
+      tags:
+        - Settings
+      summary: Get user preferences
+      description: Returns user preferences and notification settings
+      operationId: getUserSettings
+      security:
+        - sessionAuth: []
+      responses:
+        '200':
+          description: User settings retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingsResponse'
+              example:
+                settings:
+                  notifications:
+                    sms_enabled: true
+                    email_enabled: true
+                    push_enabled: true
+                    dashboard_sounds: true
+                  dashboard:
+                    default_view: "conversations"
+                    refresh_interval: 30
+                    show_tutorial: false
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Error retrieving user settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Settings
+      summary: Update user preferences
+      description: Updates user preferences and notification settings
+      operationId: updateUserSettings
+      security:
+        - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserSettingsRequest'
+            example:
+              notifications:
+                sms_enabled: true
+                email_enabled: false
+                push_enabled: true
+                dashboard_sounds: false
+              dashboard:
+                default_view: "analytics"
+                refresh_interval: 15
+      responses:
+        '200':
+          description: User settings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateUserSettingsResponse'
+              example:
+                success: true
+                settings:
+                  notifications:
+                    sms_enabled: true
+                    email_enabled: false
+                    push_enabled: true
+                    dashboard_sounds: false
+                  dashboard:
+                    default_view: "analytics"
+                    refresh_interval: 15
+                  updated_at: "2024-01-01T11:30:00Z"
+        '400':
+          description: Invalid settings data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: Error updating user settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SendReplyRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1600
+          description: Reply message content
+          example: "Thanks for reaching out! I can help with that faucet repair. What time works best for you tomorrow?"
+        takeover_from_ai:
+          type: boolean
+          default: true
+          description: Whether this reply should deactivate AI
+          example: true
+
+    UpdateLeadRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [new, qualified, appointment_scheduled, completed, lost]
+          description: Updated lead status
+          example: "qualified"
+        customer_name:
+          type: string
+          maxLength: 200
+          description: Customer name
+          example: "John Smith"
+        customer_address:
+          type: string
+          maxLength: 500
+          description: Updated customer address
+          example: "123 Main St, Los Angeles, CA 90210"
+        job_description:
+          type: string
+          maxLength: 1000
+          description: Updated job description
+          example: "Faucet repair and inspection needed"
+        estimated_value:
+          type: number
+          format: float
+          minimum: 0
+          description: Updated estimated job value
+          example: 275.00
+        notes:
+          type: string
+          maxLength: 2000
+          description: Additional notes about the lead
+          example: "Customer confirmed faucet issue, scheduled for tomorrow morning"
+
+    UpdateBusinessSettingsRequest:
+      type: object
+      properties:
+        business_name:
+          type: string
+          minLength: 3
+          maxLength: 255
+          example: "Smith Plumbing & Heating"
+        service_radius_miles:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 30
+        business_hours:
+          type: object
+          properties:
+            start:
+              type: string
+              pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+              example: "08:00"
+            end:
+              type: string
+              pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+              example: "17:00"
+        ai_settings:
+          type: object
+          properties:
+            greeting_template:
+              type: string
+              minLength: 10
+              maxLength: 500
+              example: "Hello! You've reached Smith Plumbing..."
+            ai_takeover_delay_seconds:
+              type: integer
+              minimum: 30
+              maximum: 300
+              example: 45
+
+    UpdateUserSettingsRequest:
+      type: object
+      properties:
+        notifications:
+          type: object
+          properties:
+            sms_enabled:
+              type: boolean
+              example: true
+            email_enabled:
+              type: boolean
+              example: false
+            push_enabled:
+              type: boolean
+              example: true
+            dashboard_sounds:
+              type: boolean
+              example: false
+        dashboard:
+          type: object
+          properties:
+            default_view:
+              type: string
+              enum: [conversations, analytics, settings]
+              example: "analytics"
+            refresh_interval:
+              type: integer
+              minimum: 5
+              maximum: 300
+              example: 15
+            show_tutorial:
+              type: boolean
+              example: false
+
+    SessionResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/SessionUser'
+        tenant:
+          $ref: '#/components/schemas/SessionTenant'
+        expires:
+          type: string
+          format: date-time
+          example: "2024-01-02T10:00:00Z"
+
+    DashboardStatsResponse:
+      type: object
+      properties:
+        stats:
+          $ref: '#/components/schemas/DashboardStats'
+
+    ConversationsResponse:
+      type: object
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationSummary'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    ConversationDetailResponse:
+      type: object
+      properties:
+        conversation:
+          $ref: '#/components/schemas/ConversationDetail'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        lead:
+          $ref: '#/components/schemas/LeadSummary'
+
+    SendReplyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          $ref: '#/components/schemas/Message'
+        conversation_updated:
+          $ref: '#/components/schemas/ConversationUpdate'
+
+    TakeoverResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        conversation:
+          $ref: '#/components/schemas/ConversationTakeover'
+
+    LeadsResponse:
+      type: object
+      properties:
+        leads:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeadSummary'
+        pagination:
+          $ref: '#/components/schemas/Pagination'
+
+    LeadDetailResponse:
+      type: object
+      properties:
+        lead:
+          $ref: '#/components/schemas/LeadDetail'
+
+    UpdateLeadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        lead:
+          $ref: '#/components/schemas/LeadUpdate'
+
+    BusinessSettingsResponse:
+      type: object
+      properties:
+        settings:
+          $ref: '#/components/schemas/BusinessSettings'
+
+    UpdateBusinessSettingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        settings:
+          $ref: '#/components/schemas/BusinessSettingsUpdate'
+
+    UserSettingsResponse:
+      type: object
+      properties:
+        settings:
+          $ref: '#/components/schemas/UserSettings'
+
+    UpdateUserSettingsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        settings:
+          $ref: '#/components/schemas/UserSettingsUpdate'
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              description: Error code for programmatic handling
+            message:
+              type: string
+              description: Human-readable error message
+            details:
+              type: object
+              additionalProperties: true
+              description: Additional error details
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_ERROR"
+            message:
+              type: string
+              example: "Request validation failed"
+            details:
+              type: object
+              properties:
+                field:
+                  type: string
+                  description: Field that failed validation
+                errors:
+                  type: array
+                  items:
+                    type: string
+                  description: List of validation errors
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:00Z"
+        version:
+          type: string
+          example: "1.0.0"
+        uptime:
+          type: integer
+          description: Application uptime in seconds
+          example: 3600
+        backend_services:
+          type: object
+          additionalProperties:
+            type: string
+          description: Status of backend service dependencies
+          example:
+            ts_auth_service: "healthy"
+            as_call_service: "healthy"
+            as_connection_service: "healthy"
+
+    SessionUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          example: "john@smithplumbing.com"
+        name:
+          type: string
+          example: "John Smith"
+        tenant_id:
+          type: string
+          format: uuid
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        role:
+          type: string
+          enum: [owner, operator, viewer]
+          example: "owner"
+
+    SessionTenant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "660e8400-e29b-41d4-a716-446655440001"
+        business_name:
+          type: string
+          example: "Smith Plumbing Services"
+        business_phone:
+          type: string
+          example: "+12135551234"
+        onboarding_completed:
+          type: boolean
+          example: true
+
+    DashboardStats:
+      type: object
+      properties:
+        calls_today:
+          type: integer
+          example: 12
+        missed_calls_today:
+          type: integer
+          example: 8
+        conversations_active:
+          type: integer
+          example: 3
+        leads_generated:
+          type: integer
+          example: 6
+        ai_active_count:
+          type: integer
+          example: 1
+        human_active_count:
+          type: integer
+          example: 2
+        response_rate:
+          type: number
+          format: float
+          description: Percentage of calls that resulted in conversation
+          example: 0.85
+        last_updated:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:05:00Z"
+
+    ConversationSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+        customer_phone:
+          type: string
+          example: "+12125551234"
+        last_message:
+          type: string
+          example: "I need help with a leaky faucet at 123 Main St"
+        last_message_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:01:00Z"
+        message_count:
+          type: integer
+          example: 3
+        status:
+          type: string
+          enum: [active, completed, abandoned]
+          example: "active"
+        ai_active:
+          type: boolean
+          example: true
+        unread_count:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:00Z"
+
+    ConversationDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+        customer_phone:
+          type: string
+          example: "+12125551234"
+        status:
+          type: string
+          enum: [active, completed, abandoned]
+          example: "active"
+        ai_active:
+          type: boolean
+          example: true
+        ai_takeover_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-01-01T10:01:30Z"
+        last_human_response_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:00Z"
+
+    ConversationUpdate:
+      type: object
+      properties:
+        ai_active:
+          type: boolean
+          example: false
+        ai_deactivated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:02:00Z"
+        last_human_response_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:02:00Z"
+
+    ConversationTakeover:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+        ai_active:
+          type: boolean
+          example: false
+        ai_deactivated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:02:30Z"
+        human_active:
+          type: boolean
+          example: true
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "msg-550e8400-e29b-41d4-a716-446655440001"
+        direction:
+          type: string
+          enum: [inbound, outbound]
+          example: "outbound"
+        body:
+          type: string
+          example: "Hi! Sorry we missed your call at Smith Plumbing. How can we help?"
+        sender:
+          type: string
+          enum: [system, customer, ai, human]
+          example: "system"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:30Z"
+        status:
+          type: string
+          enum: [queued, sent, delivered, received, failed]
+          example: "delivered"
+
+    LeadSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "lead-550e8400-e29b-41d4-a716-446655440002"
+        customer_phone:
+          type: string
+          example: "+12125551234"
+        customer_name:
+          type: string
+          nullable: true
+          example: null
+        customer_address:
+          type: string
+          nullable: true
+          example: "123 Main St"
+        job_type:
+          type: string
+          example: "faucet_repair"
+        urgency:
+          type: string
+          enum: [low, normal, high, emergency]
+          example: "normal"
+        estimated_value:
+          type: number
+          format: float
+          nullable: true
+          example: 225.00
+        status:
+          type: string
+          enum: [new, qualified, appointment_scheduled, completed, lost]
+          example: "new"
+        conversation_id:
+          type: string
+          format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:01:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:01:00Z"
+
+    LeadDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "lead-550e8400-e29b-41d4-a716-446655440002"
+        customer_phone:
+          type: string
+          example: "+12125551234"
+        customer_name:
+          type: string
+          nullable: true
+          example: null
+        customer_address:
+          type: string
+          nullable: true
+          example: "123 Main St"
+        job_type:
+          type: string
+          example: "faucet_repair"
+        job_description:
+          type: string
+          example: "Leaky faucet repair needed at residential property"
+        urgency:
+          type: string
+          enum: [low, normal, high, emergency]
+          example: "normal"
+        estimated_value:
+          type: number
+          format: float
+          nullable: true
+          example: 225.00
+        status:
+          type: string
+          enum: [new, qualified, appointment_scheduled, completed, lost]
+          example: "new"
+        notes:
+          type: array
+          items:
+            type: string
+          example: []
+        conversation_id:
+          type: string
+          format: uuid
+          example: "conv-550e8400-e29b-41d4-a716-446655440001"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:01:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:01:00Z"
+
+    LeadUpdate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "lead-550e8400-e29b-41d4-a716-446655440002"
+        status:
+          type: string
+          example: "qualified"
+        customer_name:
+          type: string
+          example: "John Smith"
+        estimated_value:
+          type: number
+          format: float
+          example: 275.00
+        notes:
+          type: string
+          example: "Customer confirmed faucet issue, scheduled for tomorrow morning"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T11:00:00Z"
+
+    BusinessSettings:
+      type: object
+      properties:
+        business_name:
+          type: string
+          example: "Smith Plumbing Services"
+        business_address:
+          type: string
+          example: "123 Main St, Los Angeles, CA 90210"
+        business_phone:
+          type: string
+          example: "+12135551234"
+        service_radius_miles:
+          type: integer
+          example: 25
+        business_hours:
+          $ref: '#/components/schemas/BusinessHours'
+        ai_settings:
+          $ref: '#/components/schemas/AiSettings'
+
+    BusinessSettingsUpdate:
+      type: object
+      properties:
+        business_name:
+          type: string
+          example: "Smith Plumbing & Heating"
+        service_radius_miles:
+          type: integer
+          example: 30
+        business_hours:
+          $ref: '#/components/schemas/BusinessHours'
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T12:00:00Z"
+
+    BusinessHours:
+      type: object
+      properties:
+        start:
+          type: string
+          example: "07:00"
+        end:
+          type: string
+          example: "18:00"
+        timezone:
+          type: string
+          example: "America/Los_Angeles"
+
+    AiSettings:
+      type: object
+      properties:
+        greeting_template:
+          type: string
+          example: "Hi! Sorry we missed your call at {business_name}. How can we help?"
+        ai_takeover_delay_seconds:
+          type: integer
+          example: 60
+        basic_job_estimate_min:
+          type: number
+          format: float
+          example: 150.00
+        basic_job_estimate_max:
+          type: number
+          format: float
+          example: 350.00
+
+    UserSettings:
+      type: object
+      properties:
+        notifications:
+          $ref: '#/components/schemas/NotificationSettings'
+        dashboard:
+          $ref: '#/components/schemas/DashboardSettings'
+
+    UserSettingsUpdate:
+      type: object
+      properties:
+        notifications:
+          $ref: '#/components/schemas/NotificationSettings'
+        dashboard:
+          $ref: '#/components/schemas/DashboardSettingsUpdate'
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T11:30:00Z"
+
+    NotificationSettings:
+      type: object
+      properties:
+        sms_enabled:
+          type: boolean
+          example: true
+        email_enabled:
+          type: boolean
+          example: true
+        push_enabled:
+          type: boolean
+          example: true
+        dashboard_sounds:
+          type: boolean
+          example: true
+
+    DashboardSettings:
+      type: object
+      properties:
+        default_view:
+          type: string
+          enum: [conversations, analytics, settings]
+          example: "conversations"
+        refresh_interval:
+          type: integer
+          example: 30
+        show_tutorial:
+          type: boolean
+          example: false
+
+    DashboardSettingsUpdate:
+      type: object
+      properties:
+        default_view:
+          type: string
+          enum: [conversations, analytics, settings]
+          example: "analytics"
+        refresh_interval:
+          type: integer
+          example: 15
+        show_tutorial:
+          type: boolean
+          example: false
+
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        offset:
+          type: integer
+          example: 0
+        has_more:
+          type: boolean
+          example: false
+
+  securitySchemes:
+    sessionAuth:
+      type: apiKey
+      in: cookie
+      name: next-auth.session-token
+      description: NextAuth.js session cookie
+
+security:
+  - sessionAuth: []

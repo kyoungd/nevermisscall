@@ -1,0 +1,846 @@
+openapi: 3.0.3
+info:
+  title: Dispatch-Bot-AI API
+  description: AI-powered conversation processing and automated scheduling service for field service businesses
+  version: 1.0.0
+  contact:
+    name: NeverMissCall API Support
+    url: https://nevermisscall.com/support
+    email: api-support@nevermisscall.com
+
+servers:
+  - url: http://localhost:3801
+    description: Development server
+  - url: https://api.nevermisscall.com/ai
+    description: Production server
+
+tags:
+  - name: Conversation Processing
+    description: AI conversation analysis and response generation
+  - name: Health
+    description: Service health monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Check service health
+      description: Returns the health status of the AI dispatch bot service
+      operationId: getHealthStatus
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                version: "1.0.0"
+                timestamp: "2024-01-01T10:00:00Z"
+                services:
+                  database: "healthy"
+                  geocoding: "healthy"
+                  llm: "healthy"
+                  traffic: "healthy"
+                uptime_seconds: 3600
+
+  /dispatch/process:
+    post:
+      tags:
+        - Conversation Processing
+      summary: Process customer conversation and determine next actions
+      description: Analyzes customer messages using AI to extract job information, assess urgency, and generate appropriate responses
+      operationId: processConversation
+      security:
+        - serviceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessConversationRequest'
+            example:
+              caller_phone: "+12125551234"
+              called_number: "+15555551111"
+              conversation_history:
+                - timestamp: "2024-01-01T10:00:00Z"
+                  sender: "customer"
+                  message: "Water heater not working"
+                  message_type: "sms"
+              current_message: "Water heater burst in basement! 789 Sunset Blvd, 90210"
+              business_name: "Prime Plumbing"
+              trade_type: "plumbing"
+              business_hours:
+                monday:
+                  start: "07:00"
+                  end: "18:00"
+                tuesday:
+                  start: "07:00"
+                  end: "18:00"
+                wednesday:
+                  start: "07:00"
+                  end: "18:00"
+                thursday:
+                  start: "07:00"
+                  end: "18:00"
+                friday:
+                  start: "07:00"
+                  end: "18:00"
+                saturday:
+                  start: "08:00"
+                  end: "16:00"
+                sunday: null
+              phone_hours:
+                always_available: true
+              business_address:
+                street_address: "123 Main St"
+                city: "Los Angeles"
+                state: "CA"
+                postal_code: "90210"
+                latitude: 34.0522
+                longitude: -118.2437
+              job_estimates:
+                - job_type: "water_heater_repair"
+                  description: "Water heater repair or replacement"
+                  estimated_hours: 2.5
+                  estimated_cost_min: 200.00
+                  estimated_cost_max: 500.00
+                  requires_parts: true
+                  urgency_multiplier: 1.5
+                  buffer_minutes: 45
+              business_settings:
+                accept_emergencies: true
+                out_of_office: false
+                max_jobs_per_day: 8
+                service_radius_miles: 25
+                emergency_multiplier: 1.5
+                emergency_service_enabled: true
+                work_hours_emergency_multiplier: 1.75
+                evening_emergency_multiplier: 2.25
+                night_emergency_multiplier: 2.75
+              existing_calendar:
+                - event_id: "evt-001"
+                  start_time: "2024-01-01T14:00:00Z"
+                  end_time: "2024-01-01T16:00:00Z"
+                  location_address: "456 Oak St, Los Angeles, CA"
+                  location_latitude: 34.0622
+                  location_longitude: -118.2537
+                  job_type: "faucet_repair"
+                  booking_type: "confirmed"
+                  customer_phone: "+13125551234"
+      responses:
+        '200':
+          description: Conversation processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessConversationResponse'
+              example:
+                extracted_info:
+                  job_type: "water_heater_repair"
+                  job_confidence: 0.95
+                  urgency_level: "emergency"
+                  urgency_confidence: 0.90
+                  customer_address: "789 Sunset Blvd, 90210"
+                  address_verified: true
+                  address_latitude: 34.0982
+                  address_longitude: -118.4356
+                  preferred_date: "today"
+                  customer_confirmed: false
+                validation:
+                  service_area_valid: true
+                  trade_supported: true
+                  job_type_supported: true
+                  within_business_hours: false
+                  capacity_available: true
+                  address_reachable: true
+                  validation_errors: []
+                proposed_slot:
+                  slot_id: "slot-emergency-001"
+                  start_time: "2024-01-01T20:00:00Z"
+                  end_time: "2024-01-01T23:00:00Z"
+                  duration_minutes: 180
+                  price_min: 350.00
+                  price_max: 875.00
+                  booking_type: "tentative"
+                  travel_time_minutes: 25
+                  requires_confirmation: true
+                next_action:
+                  action_type: "request_emergency_choice"
+                  message_to_customer: "🚨 Emergency water heater detected! We can come tonight for $350-$875 (emergency rate) or tomorrow morning 8 AM for $200-$500. Reply TONIGHT or TOMORROW."
+                  follow_up_needed: true
+                  follow_up_delay_minutes: 5
+                conversation_stage: "confirming"
+                needs_geocoding: false
+                geocoding_query: null
+                confidence_scores:
+                  job_type_confidence: 0.95
+                  urgency_confidence: 0.90
+                  address_confidence: 0.85
+                  overall_confidence: 0.90
+        '400':
+          description: Invalid conversation data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Service authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+        '500':
+          description: AI processing error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: "AI_PROCESSING_ERROR"
+                message: "Unable to process conversation"
+                details:
+                  llm_status: "degraded"
+                  fallback_used: true
+
+components:
+  schemas:
+    ProcessConversationRequest:
+      type: object
+      required:
+        - caller_phone
+        - called_number
+        - current_message
+        - business_name
+        - trade_type
+        - business_hours
+        - phone_hours
+        - business_address
+        - job_estimates
+        - business_settings
+      properties:
+        caller_phone:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Customer phone number in E.164 format
+          example: "+12125551234"
+        called_number:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          description: Business phone number in E.164 format
+          example: "+15555551111"
+        conversation_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationMessage'
+          description: Previous messages in the conversation
+          default: []
+        current_message:
+          type: string
+          maxLength: 1600
+          description: Current customer message to process
+          example: "Water heater burst in basement! 789 Sunset Blvd, 90210"
+        business_name:
+          type: string
+          maxLength: 255
+          description: Name of the business
+          example: "Prime Plumbing"
+        trade_type:
+          type: string
+          enum: [plumbing, electrical, hvac, locksmith, garage_door]
+          description: Type of trade/service business
+          example: "plumbing"
+        business_hours:
+          $ref: '#/components/schemas/BusinessHours'
+        phone_hours:
+          $ref: '#/components/schemas/PhoneHours'
+        business_address:
+          $ref: '#/components/schemas/BusinessAddress'
+        job_estimates:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobEstimate'
+          description: Available job types and pricing estimates
+        business_settings:
+          $ref: '#/components/schemas/BusinessSettings'
+        existing_calendar:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarEvent'
+          description: Existing calendar events for scheduling conflict detection
+          default: []
+        customer_history:
+          $ref: '#/components/schemas/CustomerHistory'
+        weather_conditions:
+          type: string
+          description: Current weather conditions (optional)
+          example: "Clear, 72°F"
+
+    ProcessConversationResponse:
+      type: object
+      properties:
+        extracted_info:
+          $ref: '#/components/schemas/ExtractedInfo'
+        validation:
+          $ref: '#/components/schemas/ValidationResult'
+        proposed_slot:
+          $ref: '#/components/schemas/AppointmentSlot'
+        next_action:
+          $ref: '#/components/schemas/NextAction'
+        conversation_stage:
+          $ref: '#/components/schemas/ConversationStage'
+        needs_geocoding:
+          type: boolean
+          description: Whether additional geocoding is needed
+          example: false
+        geocoding_query:
+          type: string
+          nullable: true
+          description: Address to geocode if needs_geocoding is true
+          example: null
+        confidence_scores:
+          $ref: '#/components/schemas/ConfidenceScores'
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code for programmatic handling
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+
+    ValidationErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Request validation failed"
+        details:
+          type: object
+          properties:
+            field:
+              type: string
+              description: Field that failed validation
+            errors:
+              type: array
+              items:
+                type: string
+              description: List of validation errors
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+          example: "healthy"
+        version:
+          type: string
+          example: "1.0.0"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:00Z"
+        services:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+              example: "healthy"
+            geocoding:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+              example: "healthy"
+            llm:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+              example: "healthy"
+            traffic:
+              type: string
+              enum: [healthy, degraded, unhealthy]
+              example: "healthy"
+        uptime_seconds:
+          type: integer
+          description: Service uptime in seconds
+          example: 3600
+
+    ConversationMessage:
+      type: object
+      required:
+        - timestamp
+        - sender
+        - message
+        - message_type
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-01T10:00:00Z"
+        sender:
+          type: string
+          enum: [customer, system, ai, human]
+          example: "customer"
+        message:
+          type: string
+          maxLength: 1600
+          example: "Water heater not working"
+        message_type:
+          type: string
+          enum: [sms, call, email]
+          example: "sms"
+
+    BusinessHours:
+      type: object
+      properties:
+        monday:
+          $ref: '#/components/schemas/DayHours'
+        tuesday:
+          $ref: '#/components/schemas/DayHours'
+        wednesday:
+          $ref: '#/components/schemas/DayHours'
+        thursday:
+          $ref: '#/components/schemas/DayHours'
+        friday:
+          $ref: '#/components/schemas/DayHours'
+        saturday:
+          $ref: '#/components/schemas/DayHours'
+        sunday:
+          $ref: '#/components/schemas/DayHours'
+
+    DayHours:
+      type: object
+      nullable: true
+      properties:
+        start:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: "07:00"
+        end:
+          type: string
+          pattern: '^([01]\d|2[0-3]):([0-5]\d)$'
+          example: "18:00"
+
+    PhoneHours:
+      type: object
+      properties:
+        always_available:
+          type: boolean
+          description: Whether phone is always available for emergencies
+          example: true
+
+    BusinessAddress:
+      type: object
+      required:
+        - street_address
+        - city
+        - state
+        - postal_code
+      properties:
+        street_address:
+          type: string
+          maxLength: 255
+          example: "123 Main St"
+        city:
+          type: string
+          maxLength: 100
+          example: "Los Angeles"
+        state:
+          type: string
+          maxLength: 2
+          pattern: '^[A-Z]{2}$'
+          example: "CA"
+        postal_code:
+          type: string
+          maxLength: 10
+          example: "90210"
+        latitude:
+          type: number
+          format: float
+          example: 34.0522
+        longitude:
+          type: number
+          format: float
+          example: -118.2437
+
+    JobEstimate:
+      type: object
+      required:
+        - job_type
+        - description
+        - estimated_hours
+        - estimated_cost_min
+        - estimated_cost_max
+        - requires_parts
+      properties:
+        job_type:
+          type: string
+          maxLength: 100
+          example: "water_heater_repair"
+        description:
+          type: string
+          maxLength: 500
+          example: "Water heater repair or replacement"
+        estimated_hours:
+          type: number
+          format: float
+          minimum: 0.5
+          maximum: 24
+          example: 2.5
+        estimated_cost_min:
+          type: number
+          format: float
+          minimum: 0
+          example: 200.00
+        estimated_cost_max:
+          type: number
+          format: float
+          minimum: 0
+          example: 500.00
+        requires_parts:
+          type: boolean
+          example: true
+        urgency_multiplier:
+          type: number
+          format: float
+          minimum: 1.0
+          default: 1.0
+          example: 1.5
+        buffer_minutes:
+          type: integer
+          minimum: 15
+          maximum: 120
+          default: 30
+          example: 45
+
+    BusinessSettings:
+      type: object
+      required:
+        - accept_emergencies
+        - max_jobs_per_day
+        - service_radius_miles
+        - emergency_service_enabled
+      properties:
+        accept_emergencies:
+          type: boolean
+          example: true
+        out_of_office:
+          type: boolean
+          default: false
+          example: false
+        max_jobs_per_day:
+          type: integer
+          minimum: 1
+          maximum: 50
+          example: 8
+        min_buffer_between_jobs:
+          type: integer
+          minimum: 15
+          maximum: 120
+          default: 30
+          example: 30
+        service_radius_miles:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 25
+        max_travel_time_minutes:
+          type: integer
+          minimum: 15
+          maximum: 180
+          default: 60
+          example: 60
+        emergency_multiplier:
+          type: number
+          format: float
+          minimum: 1.0
+          default: 1.5
+          example: 1.5
+        work_hours_emergency_multiplier:
+          type: number
+          format: float
+          minimum: 1.0
+          default: 1.75
+          example: 1.75
+        evening_emergency_multiplier:
+          type: number
+          format: float
+          minimum: 1.0
+          default: 2.25
+          example: 2.25
+        night_emergency_multiplier:
+          type: number
+          format: float
+          minimum: 1.0
+          default: 2.75
+          example: 2.75
+        emergency_service_enabled:
+          type: boolean
+          example: true
+
+    CalendarEvent:
+      type: object
+      required:
+        - event_id
+        - start_time
+        - end_time
+        - job_type
+        - booking_type
+      properties:
+        event_id:
+          type: string
+          maxLength: 100
+          example: "evt-001"
+        start_time:
+          type: string
+          format: date-time
+          example: "2024-01-01T14:00:00Z"
+        end_time:
+          type: string
+          format: date-time
+          example: "2024-01-01T16:00:00Z"
+        location_address:
+          type: string
+          maxLength: 500
+          example: "456 Oak St, Los Angeles, CA"
+        location_latitude:
+          type: number
+          format: float
+          example: 34.0622
+        location_longitude:
+          type: number
+          format: float
+          example: -118.2537
+        job_type:
+          type: string
+          maxLength: 100
+          example: "faucet_repair"
+        booking_type:
+          type: string
+          enum: [confirmed, tentative, blocked]
+          example: "confirmed"
+        customer_phone:
+          type: string
+          pattern: '^\+[1-9]\d{1,14}$'
+          example: "+13125551234"
+
+    CustomerHistory:
+      type: object
+      properties:
+        previous_jobs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PreviousJob'
+          default: []
+        preferred_time_slots:
+          type: array
+          items:
+            type: string
+          example: ["morning", "afternoon"]
+        special_instructions:
+          type: string
+          maxLength: 1000
+          example: "Gate code: 1234. Dog in backyard."
+
+    PreviousJob:
+      type: object
+      properties:
+        job_type:
+          type: string
+          example: "faucet_repair"
+        completed_at:
+          type: string
+          format: date-time
+          example: "2023-12-01T10:00:00Z"
+        satisfaction_rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+          example: 5
+
+    ExtractedInfo:
+      type: object
+      properties:
+        job_type:
+          type: string
+          example: "water_heater_repair"
+        job_confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.95
+        urgency_level:
+          type: string
+          enum: [low, normal, urgent, emergency]
+          example: "emergency"
+        urgency_confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.90
+        customer_address:
+          type: string
+          example: "789 Sunset Blvd, 90210"
+        address_verified:
+          type: boolean
+          example: true
+        address_latitude:
+          type: number
+          format: float
+          example: 34.0982
+        address_longitude:
+          type: number
+          format: float
+          example: -118.4356
+        preferred_date:
+          type: string
+          example: "today"
+        customer_confirmed:
+          type: boolean
+          example: false
+
+    ValidationResult:
+      type: object
+      properties:
+        service_area_valid:
+          type: boolean
+          example: true
+        trade_supported:
+          type: boolean
+          example: true
+        job_type_supported:
+          type: boolean
+          example: true
+        within_business_hours:
+          type: boolean
+          example: false
+        capacity_available:
+          type: boolean
+          example: true
+        address_reachable:
+          type: boolean
+          example: true
+        validation_errors:
+          type: array
+          items:
+            type: string
+          example: []
+
+    AppointmentSlot:
+      type: object
+      nullable: true
+      properties:
+        slot_id:
+          type: string
+          example: "slot-emergency-001"
+        start_time:
+          type: string
+          format: date-time
+          example: "2024-01-01T20:00:00Z"
+        end_time:
+          type: string
+          format: date-time
+          example: "2024-01-01T23:00:00Z"
+        duration_minutes:
+          type: integer
+          example: 180
+        price_min:
+          type: number
+          format: float
+          example: 350.00
+        price_max:
+          type: number
+          format: float
+          example: 875.00
+        booking_type:
+          type: string
+          enum: [confirmed, tentative]
+          example: "tentative"
+        travel_time_minutes:
+          type: integer
+          example: 25
+        requires_confirmation:
+          type: boolean
+          example: true
+
+    NextAction:
+      type: object
+      properties:
+        action_type:
+          type: string
+          enum: [request_emergency_choice, request_confirmation, request_address, request_time_preference, schedule_appointment, escalate_to_human]
+          example: "request_emergency_choice"
+        message_to_customer:
+          type: string
+          maxLength: 1600
+          example: "🚨 Emergency water heater detected! We can come tonight for $350-$875 (emergency rate) or tomorrow morning 8 AM for $200-$500. Reply TONIGHT or TOMORROW."
+        follow_up_needed:
+          type: boolean
+          example: true
+        follow_up_delay_minutes:
+          type: integer
+          minimum: 1
+          maximum: 60
+          example: 5
+
+    ConversationStage:
+      type: string
+      enum: [initial, collecting_info, confirming, booking, complete, escalated, rejected]
+      example: "confirming"
+
+    ConfidenceScores:
+      type: object
+      properties:
+        job_type_confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.95
+        urgency_confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.90
+        address_confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.85
+        overall_confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.90
+
+  securitySchemes:
+    serviceAuth:
+      type: apiKey
+      in: header
+      name: X-Service-Key
+      description: Internal service authentication key
+
+security:
+  - serviceAuth: []
