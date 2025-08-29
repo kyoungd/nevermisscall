@@ -4,7 +4,6 @@ import pytest
 import asyncio
 from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
-import socketio
 
 from src.as_connection_service.services.redis_client import RedisClient
 from src.as_connection_service.services.auth_service import AuthService
@@ -64,11 +63,12 @@ async def mock_auth_service():
 @pytest.fixture
 async def mock_socketio_server():
     """Mock Socket.IO server."""
-    sio = AsyncMock(spec=socketio.AsyncServer)
+    sio = AsyncMock()
     sio.emit.return_value = None
     sio.enter_room.return_value = None
     sio.leave_room.return_value = None
     sio.disconnect.return_value = None
+    sio.event = MagicMock()
     return sio
 
 

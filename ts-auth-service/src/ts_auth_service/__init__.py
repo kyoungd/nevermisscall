@@ -1,0 +1,1 @@
+"""TypeScript Auth Service - User authentication and JWT token management."""

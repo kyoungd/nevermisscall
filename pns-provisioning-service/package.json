@@ -1,0 +1,33 @@
+{
+  "name": "pns-provisioning-service",
+  "version": "1.0.0",
+  "description": "Phone Number Service (PNS) Provisioning Service - Handles phone number provisioning via Twilio",
+  "main": "src/pns_provisioning_service/main.py",
+  "scripts": {
+    "dev": "uvicorn src.pns_provisioning_service.main:app --reload --port 3501",
+    "start": "uvicorn src.pns_provisioning_service.main:app --host 0.0.0.0 --port 3501",
+    "test": "python -m pytest tests/ -v",
+    "test:coverage": "python -m pytest tests/ --cov=src/pns_provisioning_service --cov-report=html",
+    "install": "pip install -r requirements.txt",
+    "install:dev": "pip install -r requirements.txt && pip install pytest pytest-cov pytest-asyncio",
+    "lint": "flake8 src/ tests/",
+    "format": "black src/ tests/"
+  },
+  "keywords": [
+    "phone",
+    "provisioning",
+    "twilio",
+    "sms",
+    "voice",
+    "api"
+  ],
+  "author": "NeverMissCall Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nevermisscall/nmc.git"
+  },
+  "engines": {
+    "python": ">=3.10"
+  }
+}

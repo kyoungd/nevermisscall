@@ -1,0 +1,33 @@
+{
+  "name": "ts-auth-service",
+  "version": "1.0.0",
+  "description": "TypeScript Auth Service - User registration, login, and JWT token management",
+  "main": "src/ts_auth_service/main.py",
+  "scripts": {
+    "dev": "uvicorn src.ts_auth_service.main:app --reload --port 3301",
+    "start": "uvicorn src.ts_auth_service.main:app --host 0.0.0.0 --port 3301",
+    "test": "python -m unittest discover tests/ -v",
+    "test:coverage": "python -m coverage run -m unittest discover tests/ && python -m coverage report",
+    "install": "pip install -r requirements.txt",
+    "install:dev": "pip install -r requirements.txt && pip install unittest coverage",
+    "lint": "flake8 src/ tests/",
+    "format": "black src/ tests/"
+  },
+  "keywords": [
+    "authentication",
+    "jwt",
+    "fastapi",
+    "python",
+    "auth",
+    "api"
+  ],
+  "author": "NeverMissCall Team",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nevermisscall/nmc.git"
+  },
+  "engines": {
+    "python": ">=3.11"
+  }
+}
