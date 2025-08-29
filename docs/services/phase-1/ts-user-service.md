@@ -26,31 +26,34 @@
 ## Technical Specification
 
 ### Technology Stack
-- **Runtime**: Node.js 18+ with TypeScript 5+
-- **Framework**: Express.js 4+
-- **Database**: PostgreSQL with Prisma ORM
-- **Validation**: Joi for request validation
-- **Caching**: Redis for profile caching (optional)
+- **Runtime**: Python 3.10+
+- **Framework**: FastAPI with pydantic for data validation
+- **Database**: PostgreSQL with asyncpg and database connection pooling
+- **Caching**: aioredis for profile caching (optional)
+- **File Storage**: aiofiles for async file operations
+- **ASGI Server**: uvicorn for production deployment
 
 ### Service Architecture
 
 ```mermaid
 graph TB
     subgraph "ts-user-service (Port 3303)"
-        UserController[UserController]
-        ProfileController[ProfileController]
+        FastAPIApp[FastAPI Application]
+        UserRouter[UserRouter]
+        ProfileRouter[ProfileRouter]
         UserService[UserService]
         ValidationService[ValidationService]
         Database[(PostgreSQL<br/>nevermisscall)]
     end
     
-    WebUI[web-ui] --> UserController
-    WebUI --> ProfileController
-    TSAuth[ts-auth-service] --> UserController
-    ASCall[as-call-service] --> UserController
+    WebUI[web-ui] --> FastAPIApp
+    TSAuth[ts-auth-service] --> FastAPIApp
+    ASCall[as-call-service] --> FastAPIApp
     
-    UserController --> UserService
-    ProfileController --> UserService
+    FastAPIApp --> UserRouter
+    FastAPIApp --> ProfileRouter
+    UserRouter --> UserService
+    ProfileRouter --> UserService
     UserService --> ValidationService
     UserService --> Database
 ```
@@ -285,12 +288,11 @@ graph TB
 
 ### User Profile Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
-@dataclass
-class UserProfile:
+class UserProfile(BaseModel):
     user_id: str
     email: str  # Read-only, managed by auth service
     first_name: str
@@ -308,31 +310,27 @@ class UserProfile:
 
 ### User Preferences Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Literal
 from datetime import datetime
 
-@dataclass
-class NotificationPreferences:
+class NotificationPreferences(BaseModel):
     sms_enabled: bool
     email_enabled: bool
     push_enabled: bool
     dashboard_sounds: bool
 
-@dataclass
-class DashboardPreferences:
+class DashboardPreferences(BaseModel):
     default_view: Literal['conversations', 'analytics', 'settings']
     refresh_interval: int  # seconds
     show_tutorial: bool
 
-@dataclass
-class CommunicationPreferences:
+class CommunicationPreferences(BaseModel):
     auto_response_enabled: bool
     ai_takeover_notifications: bool
     customer_response_timeout: int  # seconds
 
-@dataclass
-class UserPreferences:
+class UserPreferences(BaseModel):
     user_id: str
     notifications: NotificationPreferences
     dashboard: DashboardPreferences
@@ -343,12 +341,11 @@ class UserPreferences:
 
 ### User Status Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
-@dataclass
-class UserStatus:
+class UserStatus(BaseModel):
     user_id: str
     is_active: bool
     is_online: bool
@@ -557,9 +554,11 @@ SERVICE_NAME=ts-user-service
 ## Dependencies
 
 ### Core Dependencies
-- Express.js, Prisma ORM, PostgreSQL driver
-- Joi for validation, Winston for logging
-- Multer for file uploads (profile photos)
+- FastAPI with pydantic for data validation and API framework
+- asyncpg for PostgreSQL async database operations
+- aiofiles for async file operations and profile photo handling
+- pydantic-settings for configuration management
+- Python logging with structured JSON output
 
 ### External Services
 - **ts-auth-service**: User authentication and email sync
@@ -567,8 +566,8 @@ SERVICE_NAME=ts-user-service
 - **Storage Service**: Profile photo storage (local or cloud)
 
 ### Optional Dependencies
-- **Redis**: Profile caching for improved performance
-- **Image Processing**: Profile photo resizing and optimization
+- **aioredis**: Profile caching for improved performance
+- **Pillow**: Profile photo resizing and optimization
 
 ## Integration Points
 

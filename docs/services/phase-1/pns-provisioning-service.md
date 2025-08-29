@@ -26,30 +26,33 @@
 ## Technical Specification
 
 ### Technology Stack
-- **Runtime**: Node.js 18+ with TypeScript 5+
-- **Framework**: Express.js 4+
-- **Database**: PostgreSQL with Prisma ORM
-- **External API**: Twilio REST API
-- **Validation**: Joi for request validation
+- **Runtime**: Python 3.10+
+- **Framework**: FastAPI with pydantic for data validation
+- **Database**: PostgreSQL with asyncpg and database connection pooling
+- **External API**: Twilio REST API with twilio-python SDK
+- **ASGI Server**: uvicorn for production deployment
 
 ### Service Architecture
 
 ```mermaid
 graph TB
     subgraph "pns-provisioning-service (Port 3501)"
-        ProvisioningController[ProvisioningController]
-        NumberController[NumberController]
+        FastAPIApp[FastAPI Application]
+        ProvisioningRouter[ProvisioningRouter]
+        NumberRouter[NumberRouter]
         ProvisioningService[ProvisioningService]
         TwilioClient[TwilioClient]
         Database[(PostgreSQL<br/>nevermisscall)]
     end
     
-    TSTenant[ts-tenant-service] --> ProvisioningController
-    WebUI[web-ui] --> NumberController
-    TwilioServer[twilio-server] --> NumberController
+    TSTenant[ts-tenant-service] --> FastAPIApp
+    WebUI[web-ui] --> FastAPIApp
+    TwilioServer[twilio-server] --> FastAPIApp
     
-    ProvisioningController --> ProvisioningService
-    NumberController --> ProvisioningService
+    FastAPIApp --> ProvisioningRouter
+    FastAPIApp --> NumberRouter
+    ProvisioningRouter --> ProvisioningService
+    NumberRouter --> ProvisioningService
     ProvisioningService --> TwilioClient
     ProvisioningService --> Database
     TwilioClient -.-> TwilioAPI[Twilio REST API]
@@ -249,12 +252,11 @@ graph TB
 
 ### Phone Number Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal, List
 from datetime import datetime
 
-@dataclass
-class PhoneNumber:
+class PhoneNumber(BaseModel):
     id: str
     tenant_id: str  # One phone number per tenant in Phase 1
     
@@ -296,12 +298,11 @@ class PhoneNumber:
 
 ### Messaging Service Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
-@dataclass
-class MessagingService:
+class MessagingService(BaseModel):
     phone_number_id: str
     messaging_service_sid: str
     friendly_name: str
@@ -399,18 +400,26 @@ CREATE INDEX idx_phone_numbers_area_code ON phone_numbers (area_code, region);
 ### Webhook Configuration
 ```python
 import os
+from pydantic_settings import BaseSettings
 
-webhook_configuration = {
-    'voice': {
-        'url': f"{os.environ.get('WEBHOOK_BASE_URL')}/webhooks/twilio/call",
-        'method': 'POST',
-        'status_callback': f"{os.environ.get('WEBHOOK_BASE_URL')}/webhooks/twilio/call/status"
-    },
-    'sms': {
-        'url': f"{os.environ.get('WEBHOOK_BASE_URL')}/webhooks/twilio/sms",
-        'method': 'POST'
+class Settings(BaseSettings):
+    webhook_base_url: str
+    webhook_voice_path: str = "/webhooks/twilio/call"
+    webhook_sms_path: str = "/webhooks/twilio/sms"
+    webhook_status_path: str = "/webhooks/twilio/call/status"
+
+def get_webhook_configuration(settings: Settings) -> dict:
+    return {
+        'voice': {
+            'url': f"{settings.webhook_base_url}{settings.webhook_voice_path}",
+            'method': 'POST',
+            'status_callback': f"{settings.webhook_base_url}{settings.webhook_status_path}"
+        },
+        'sms': {
+            'url': f"{settings.webhook_base_url}{settings.webhook_sms_path}",
+            'method': 'POST'
+        }
     }
-}
 ```
 
 ### Number Selection Logic (Phase 1 - Simplified)
@@ -431,28 +440,24 @@ webhook_configuration = {
 ```python
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
-from dataclasses import dataclass
+from pydantic import BaseModel
 
-@dataclass
-class AvailableNumber:
+class AvailableNumber(BaseModel):
     phone_number: str
     friendly_name: str
     capabilities: List[str]
 
-@dataclass
-class PurchasedNumber:
+class PurchasedNumber(BaseModel):
     sid: str
     phone_number: str
     status: str
 
-@dataclass
-class WebhookConfig:
+class WebhookConfig(BaseModel):
     voice_url: str
     sms_url: str
     status_callback_url: str
 
-@dataclass
-class MessagingService:
+class MessagingServiceResponse(BaseModel):
     sid: str
     friendly_name: str
 
@@ -470,7 +475,7 @@ class TwilioPhoneNumberService(ABC):
         pass
     
     @abstractmethod
-    async def create_messaging_service(self, name: str) -> MessagingService:
+    async def create_messaging_service(self, name: str) -> MessagingServiceResponse:
         pass
     
     @abstractmethod
@@ -588,9 +593,11 @@ MAX_CONCURRENT_PROVISIONING=5
 ## Dependencies
 
 ### Core Dependencies
-- Express.js, Prisma ORM, PostgreSQL driver
-- Joi for validation, Winston for logging
-- Twilio SDK for REST API integration
+- FastAPI with pydantic for data validation and API framework
+- asyncpg for PostgreSQL async database operations
+- twilio-python SDK for Twilio REST API integration
+- pydantic-settings for configuration management
+- Python logging with structured JSON output
 
 ### External Services
 - **Twilio REST API**: Phone number management

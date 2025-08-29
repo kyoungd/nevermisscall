@@ -26,32 +26,36 @@
 ## Technical Specification
 
 ### Technology Stack
-- **Runtime**: Node.js 18+ with TypeScript 5+
-- **Framework**: Express.js + Socket.IO 4+
-- **Authentication**: JWT token validation
-- **Caching**: Redis for connection state and message queuing
+- **Runtime**: Python 3.10+
+- **Framework**: FastAPI with python-socketio for WebSocket support
+- **Authentication**: JWT token validation with python-jose
+- **Caching**: Redis for connection state and message queuing with aioredis
 - **Event Broadcasting**: Socket.IO rooms for tenant isolation
+- **ASGI Server**: uvicorn for production deployment
 
 ### Service Architecture
 
 ```mermaid
 graph TB
     subgraph "as-connection-service (Port 3105)"
-        WebSocketServer[Socket.IO Server]
+        FastAPIApp[FastAPI Application]
+        SocketIOServer[python-socketio Server]
         ConnectionManager[ConnectionManager]
         EventBroadcaster[EventBroadcaster]
-        AuthMiddleware[AuthMiddleware]
-        RedisClient[Redis Client]
+        AuthMiddleware[JWT AuthMiddleware]
+        RedisClient[aioredis Client]
     end
     
-    WebUI[web-ui] -.->|WebSocket| WebSocketServer
-    ASCall[as-call-service] --> EventBroadcaster
-    TwilioServer[twilio-server] --> EventBroadcaster
+    WebUI[web-ui] -.->|WebSocket| SocketIOServer
+    ASCall[as-call-service] --> FastAPIApp
+    TwilioServer[twilio-server] --> FastAPIApp
     
-    WebSocketServer --> ConnectionManager
-    WebSocketServer --> AuthMiddleware
+    FastAPIApp --> SocketIOServer
+    SocketIOServer --> ConnectionManager
+    SocketIOServer --> AuthMiddleware
     ConnectionManager --> RedisClient
-    EventBroadcaster --> WebSocketServer
+    EventBroadcaster --> SocketIOServer
+    FastAPIApp --> EventBroadcaster
     
     AuthMiddleware --> TSAuth[ts-auth-service]
 ```
@@ -392,12 +396,11 @@ graph TB
 
 ### Connection State
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
-@dataclass
-class ConnectionState:
+class ConnectionState(BaseModel):
     connection_id: str
     socket_id: str
     user_id: str
@@ -425,12 +428,11 @@ class ConnectionState:
 
 ### Event Queue Item
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, List, Any
 from datetime import datetime
 
-@dataclass
-class EventQueueItem:
+class EventQueueItem(BaseModel):
     id: str
     event: str
     tenant_id: str
@@ -480,8 +482,9 @@ event_queue:{eventId} -> {
 
 ### Room Management
 ```python
-# Socket.IO rooms for tenant isolation
+# python-socketio rooms for tenant isolation
 def get_room_names():
+    """Generate room names for different entity types."""
     return {
         'tenant': lambda tenant_id: f'tenant:{tenant_id}',
         'conversation': lambda conversation_id: f'conversation:{conversation_id}',
@@ -504,7 +507,7 @@ def get_room_names():
 2. **Validate Request**: Verify service authentication and data format
 3. **Determine Recipients**: Find all active connections for target tenant/conversation
 4. **Queue Event**: Store event in Redis queue for reliability
-5. **Broadcast**: Send event to all target Socket.IO rooms
+5. **Broadcast**: Send event to all target python-socketio rooms
 6. **Track Delivery**: Monitor delivery success and retry failures
 7. **Clean Up**: Remove expired events from queue
 
@@ -515,7 +518,7 @@ def get_room_names():
 - **Load Balancing**: Distribute connections across multiple instances (future)
 
 ### Tenant Isolation
-- **Room-Based Separation**: Each tenant has isolated Socket.IO room
+- **Room-Based Separation**: Each tenant has isolated python-socketio room
 - **Connection Validation**: Verify user belongs to target tenant
 - **Event Filtering**: Ensure events only reach authorized connections
 - **State Isolation**: Redis keys include tenant ID for separation
@@ -618,7 +621,7 @@ CONNECTION_REDIS_DB=1
 EVENT_QUEUE_REDIS_DB=2
 CONNECTION_TTL_SECONDS=3600
 
-# Socket.IO Configuration  
+# python-socketio Configuration  
 SOCKETIO_CORS_ORIGIN=http://localhost:3000
 SOCKETIO_TRANSPORTS=websocket,polling
 HEARTBEAT_INTERVAL_MS=30000
@@ -631,7 +634,7 @@ MAX_MESSAGES_PER_MINUTE_PER_USER=30
 
 # Service Dependencies
 TS_AUTH_SERVICE_URL=http://localhost:3301
-AS_CALL_SERVICE_URL=http://localhost:3103
+AS_CALL_SERVICE_URL=http://localhost:3104
 TS_TENANT_SERVICE_URL=http://localhost:3302
 
 # Service Authentication
@@ -642,34 +645,34 @@ PORT=3105
 SERVICE_NAME=as-connection-service
 ```
 
-### Socket.IO Configuration
+### python-socketio Configuration
 ```python
 import os
-from socketio import Server
+import socketio
 
-io = Server(cors_allowed_origins=os.environ.get('SOCKETIO_CORS_ORIGIN', '*'))
-io.set_cors_options({
-    'cors_allowed_origins': os.environ.get('SOCKETIO_CORS_ORIGIN', '*'),
-    'cors_allowed_methods': ['GET', 'POST']
-})
+# Create Socket.IO server with FastAPI integration
+sio = socketio.AsyncServer(
+    cors_allowed_origins=os.environ.get('SOCKETIO_CORS_ORIGIN', '*').split(','),
+    async_mode='asgi'
+)
 
-# Socket.IO configuration options
+# python-socketio configuration options
 socketio_config = {
-    'transports': ['websocket', 'polling'],
-    'ping_timeout': 60000,
-    'ping_interval': 30000,
+    'ping_timeout': int(os.environ.get('HEARTBEAT_TIMEOUT_MS', '60000')) / 1000,  # Convert to seconds
+    'ping_interval': int(os.environ.get('HEARTBEAT_INTERVAL_MS', '30000')) / 1000,  # Convert to seconds
     'max_http_buffer_size': 64 * 1024,  # 64KB
-    'allow_eio3': True
+    'engineio_logger': False,
+    'logger': False,
 }
 ```
 
 ## Dependencies
 
 ### Core Dependencies
-- Socket.IO for WebSocket management
-- Redis client for state storage
-- Express.js for HTTP endpoints
-- Winston for structured logging
+- python-socketio for WebSocket management
+- aioredis for async Redis state storage
+- FastAPI for HTTP endpoints and ASGI application
+- Python logging with structured JSON output
 
 ### External Services
 - **ts-auth-service**: JWT token validation

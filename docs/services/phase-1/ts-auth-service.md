@@ -39,16 +39,18 @@
 ```mermaid
 graph TB
     subgraph "ts-auth-service (Port 3301)"
-        AuthController[AuthController]
+        FastAPIApp[FastAPI Application]
+        AuthRouter[AuthRouter]
         AuthService[AuthService]
         TokenService[TokenService]
-        ValidationMiddleware[ValidationMiddleware]
+        AuthMiddleware[AuthMiddleware]
         Database[(PostgreSQL<br/>nevermisscall)]
     end
     
-    WebUI[web-ui] --> AuthController
-    ASCallService[as-call-service] --> AuthController
-    AuthController --> AuthService
+    WebUI[web-ui] --> FastAPIApp
+    ASCallService[as-call-service] --> FastAPIApp
+    FastAPIApp --> AuthRouter
+    AuthRouter --> AuthService
     AuthService --> TokenService
     AuthService --> Database
 ```
@@ -189,12 +191,11 @@ graph TB
 
 ### User Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
-@dataclass
-class User:
+class User(BaseModel):
     id: str
     email: str
     password_hash: str
@@ -211,12 +212,11 @@ class User:
 
 ### Session Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
-@dataclass
-class UserSession:
+class UserSession(BaseModel):
     id: str
     user_id: str
     refresh_token: str
@@ -229,10 +229,9 @@ class UserSession:
 
 ### JWT Payload
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 
-@dataclass
-class JWTPayload:
+class JWTPayload(BaseModel):
     sub: str  # user ID
     email: str
     tenant_id: str

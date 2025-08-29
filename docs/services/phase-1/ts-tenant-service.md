@@ -26,31 +26,33 @@
 ## Technical Specification
 
 ### Technology Stack
-- **Runtime**: Node.js 18+ with TypeScript 5+
-- **Framework**: Express.js 4+
-- **Database**: PostgreSQL with Prisma ORM
-- **Validation**: Joi for request validation
-- **External APIs**: Google Maps Geocoding (for address validation)
+- **Runtime**: Python 3.10+
+- **Framework**: FastAPI with pydantic for data validation
+- **Database**: PostgreSQL with asyncpg and database connection pooling
+- **External APIs**: Google Maps Geocoding API with httpx for address validation
+- **ASGI Server**: uvicorn for production deployment
 
 ### Service Architecture
 
 ```mermaid
 graph TB
     subgraph "ts-tenant-service (Port 3302)"
-        TenantController[TenantController]
-        OnboardingController[OnboardingController]
+        FastAPIApp[FastAPI Application]
+        TenantRouter[TenantRouter]
+        OnboardingRouter[OnboardingRouter]
         TenantService[TenantService]
         ValidationService[ValidationService]
         Database[(PostgreSQL<br/>nevermisscall)]
     end
     
-    WebUI[web-ui] --> TenantController
-    WebUI --> OnboardingController
-    TSAuth[ts-auth-service] --> TenantController
-    PNSProvision[pns-provisioning-service] --> TenantController
+    WebUI[web-ui] --> FastAPIApp
+    TSAuth[ts-auth-service] --> FastAPIApp
+    PNSProvision[pns-provisioning-service] --> FastAPIApp
     
-    TenantController --> TenantService
-    OnboardingController --> TenantService
+    FastAPIApp --> TenantRouter
+    FastAPIApp --> OnboardingRouter
+    TenantRouter --> TenantService
+    OnboardingRouter --> TenantService
     TenantService --> ValidationService
     TenantService --> Database
     ValidationService --> GoogleMapsAPI[Google Maps API]
@@ -312,12 +314,11 @@ graph TB
 
 ### Tenant Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal
 from datetime import datetime
 
-@dataclass
-class Tenant:
+class Tenant(BaseModel):
     id: str
     business_name: str
     business_address: str
@@ -346,11 +347,10 @@ class Tenant:
 
 ### Business Settings Entity
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from datetime import datetime
 
-@dataclass
-class BusinessSettings:
+class BusinessSettings(BaseModel):
     id: str
     tenant_id: str
     
@@ -369,20 +369,18 @@ class BusinessSettings:
 
 ### Onboarding Progress
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
 
-@dataclass
-class OnboardingStep:
+class OnboardingStep(BaseModel):
     step: int
     name: str
     completed: bool
     required: bool
     completed_at: Optional[datetime] = None
 
-@dataclass
-class OnboardingProgress:
+class OnboardingProgress(BaseModel):
     tenant_id: str
     current_step: int
     total_steps: int
@@ -452,21 +450,20 @@ CREATE INDEX idx_business_settings_tenant ON business_settings (tenant_id);
 
 ### Onboarding Workflow
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import List
 
-@dataclass
-class OnboardingStep:
+class OnboardingStepDefinition(BaseModel):
     step: int
     name: str
     required: bool
 
 onboarding_steps = [
-    OnboardingStep(step=1, name='business_info', required=True),
-    OnboardingStep(step=2, name='phone_number', required=True),
-    OnboardingStep(step=3, name='ai_configuration', required=True),
-    OnboardingStep(step=4, name='test_setup', required=False),
-    OnboardingStep(step=5, name='complete', required=True)
+    OnboardingStepDefinition(step=1, name='business_info', required=True),
+    OnboardingStepDefinition(step=2, name='phone_number', required=True),
+    OnboardingStepDefinition(step=3, name='ai_configuration', required=True),
+    OnboardingStepDefinition(step=4, name='test_setup', required=False),
+    OnboardingStepDefinition(step=5, name='complete', required=True)
 ]
 ```
 
@@ -582,9 +579,11 @@ SERVICE_NAME=ts-tenant-service
 ## Dependencies
 
 ### Core Dependencies
-- Express.js, Prisma ORM, PostgreSQL driver
-- Joi for validation, Winston for logging
-- Axios for Google Maps API calls
+- FastAPI with pydantic for data validation and API framework
+- asyncpg for PostgreSQL async database operations
+- httpx for Google Maps API calls and HTTP client operations
+- pydantic-settings for configuration management
+- Python logging with structured JSON output
 
 ### External Services
 - **ts-auth-service**: JWT token validation

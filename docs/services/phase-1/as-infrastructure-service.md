@@ -27,22 +27,24 @@
 ## Technical Specification
 
 ### Technology Stack
-- **Runtime**: Node.js 18+ with TypeScript 5+
-- **Framework**: Express.js 4+
-- **Monitoring**: Custom health checks with HTTP requests
-- **Storage**: Redis for metrics caching and service state
-- **Logging**: Winston with structured logging
+- **Runtime**: Python 3.10+
+- **Framework**: FastAPI with asyncio for concurrent health checks
+- **Monitoring**: Custom health checks with aiohttp async HTTP requests
+- **Storage**: aioredis for metrics caching and service state
+- **Logging**: Python logging with structured JSON output
+- **ASGI Server**: uvicorn for production deployment
 
 ### Service Architecture
 
 ```mermaid
 graph TB
     subgraph "as-infrastructure-service (Port 3106)"
+        FastAPIApp[FastAPI Application]
         HealthChecker[HealthChecker]
         MetricsCollector[MetricsCollector]
         ServiceRegistry[ServiceRegistry]
         AlertManager[AlertManager]
-        RedisClient[Redis Client]
+        RedisClient[aioredis Client]
     end
     
     WebUI[web-ui] --> HealthChecker
@@ -410,12 +412,11 @@ graph TB
 
 ### Service Health Status
 ```python
-from dataclasses import dataclass
+from pydantic import BaseModel
 from typing import Optional, Literal, List
 from datetime import datetime
 
-@dataclass
-class ServiceHealth:
+class ServiceHealth(BaseModel):
     name: str
     url: str
     port: int
@@ -720,11 +721,11 @@ LOG_LEVEL=info
 ## Dependencies
 
 ### Core Dependencies
-- Express.js for HTTP API
-- Axios for service health checks
-- Redis client for metrics storage
-- Winston for structured logging
-- Node-cron for scheduled health checks
+- FastAPI for HTTP API endpoints
+- aiohttp for async service health checks
+- aioredis for async metrics storage
+- Python logging with structured JSON output
+- APScheduler for scheduled health checks and background tasks
 
 ### External Dependencies
 - **All Phase 1 Services**: Health check endpoints
