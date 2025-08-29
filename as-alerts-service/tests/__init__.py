@@ -1,0 +1,1 @@
+# AS Alerts Service tests package

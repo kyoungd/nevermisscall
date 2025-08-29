@@ -18,12 +18,12 @@ sequenceDiagram
     participant CallService as as-call-service
     participant ConnectionService as as-connection-service
     participant WebUI as web-ui
-    participant NMCAI as nmc-ai
+    participant DispatchAI as dispatch-bot-ai
     
     Customer->>TwilioAPI: Incoming call to business number
     TwilioAPI->>TwilioServer: Webhook: call.initiated
     TwilioServer->>CallService: POST /calls/incoming
-    CallService->>ConnectionService: Notify: incoming_call
+    CallService->>ConnectionService: POST /internal/events/broadcast: incoming_call
     ConnectionService->>WebUI: WebSocket: call_notification
     
     Note over WebUI: Business owner sees call notification
@@ -32,11 +32,11 @@ sequenceDiagram
     TwilioAPI->>TwilioServer: Webhook: call.no-answer
     TwilioServer->>CallService: POST /calls/missed
     CallService->>CallService: Create conversation record
-    CallService->>TwilioServer: POST /sms/send-initial
+    CallService->>TwilioServer: POST /sms/send
     TwilioServer->>TwilioAPI: Send SMS to customer
     TwilioAPI->>Customer: SMS: "Hi! Sorry we missed you at [Business]. We're helping another customer - how can we help you?"
     
-    TwilioServer->>ConnectionService: Notify: sms_sent
+    CallService->>ConnectionService: POST /internal/events/broadcast: sms_sent
     ConnectionService->>WebUI: WebSocket: conversation_started
     
     Note over WebUI: Business owner sees new conversation
@@ -55,34 +55,34 @@ sequenceDiagram
     participant CallService as as-call-service
     participant ConnectionService as as-connection-service
     participant WebUI as web-ui
-    participant NMCAI as nmc-ai
+    participant DispatchAI as dispatch-bot-ai
     participant OpenAI as OpenAI API
     
     Customer->>TwilioAPI: SMS reply: "I need plumbing help"
     TwilioAPI->>TwilioServer: Webhook: message.received
-    TwilioServer->>CallService: POST /conversations/message
+    TwilioServer->>CallService: POST /conversations/messages/incoming
     CallService->>CallService: Store message, start 60s timer
-    CallService->>ConnectionService: Notify: new_message
+    CallService->>ConnectionService: POST /internal/events/broadcast
     ConnectionService->>WebUI: WebSocket: message_received
     
     Note over WebUI: Business owner has 60 seconds to respond
     
     alt Business owner responds within 60 seconds
-        WebUI->>CallService: POST /conversations/reply
+        WebUI->>CallService: POST /conversations/{conversationId}/messages
         CallService->>TwilioServer: POST /sms/send
         TwilioServer->>TwilioAPI: Send SMS
         TwilioAPI->>Customer: Human response
     else No response after 60 seconds
-        CallService->>NMCAI: POST /conversations/takeover
-        NMCAI->>CallService: GET /conversations/context
-        CallService->>NMCAI: Return conversation history
-        NMCAI->>OpenAI: Generate contextual response
-        OpenAI->>NMCAI: AI response
-        NMCAI->>CallService: POST /conversations/ai-reply
+        CallService->>DispatchAI: POST /messages/analyze
+        DispatchAI->>CallService: GET /conversations/{conversationId}/messages
+        CallService->>DispatchAI: Return conversation history
+        DispatchAI->>OpenAI: Generate contextual response
+        OpenAI->>DispatchAI: AI response
+        DispatchAI->>CallService: POST /conversations/{conversationId}/messages
         CallService->>TwilioServer: POST /sms/send
         TwilioServer->>TwilioAPI: Send SMS
         TwilioAPI->>Customer: AI response: "I can help! What type of plumbing issue are you experiencing?"
-        TwilioServer->>ConnectionService: Notify: ai_takeover
+        CallService->>ConnectionService: POST /internal/events/broadcast
         ConnectionService->>WebUI: WebSocket: ai_active
     end
 ```
@@ -98,7 +98,7 @@ sequenceDiagram
     participant TwilioAPI as Twilio API
     participant TwilioServer as twilio-server
     participant CallService as as-call-service
-    participant NMCAI as nmc-ai
+    participant DispatchAI as dispatch-bot-ai
     participant OpenAI as OpenAI API
     participant UniversalCal as universal-calendar
     participant GoogleCal as Google Calendar
@@ -107,47 +107,47 @@ sequenceDiagram
     
     Customer->>TwilioAPI: SMS: "I need an appointment tomorrow"
     TwilioAPI->>TwilioServer: Webhook: message.received
-    TwilioServer->>CallService: POST /conversations/message
-    CallService->>NMCAI: POST /process-message
+    TwilioServer->>CallService: POST /conversations/messages/incoming
+    CallService->>DispatchAI: POST /messages/analyze
     
-    NMCAI->>OpenAI: Analyze intent: appointment request
-    OpenAI->>NMCAI: Intent: schedule_appointment
+    DispatchAI->>OpenAI: Analyze intent: appointment request
+    OpenAI->>DispatchAI: Intent: schedule_appointment
     
-    NMCAI->>UniversalCal: GET /availability?date=tomorrow
+    DispatchAI->>UniversalCal: GET /availability/check
     UniversalCal->>GoogleCal: Check business calendar
     GoogleCal->>UniversalCal: Available slots
-    UniversalCal->>NMCAI: Available: 10am, 2pm, 4pm
+    UniversalCal->>DispatchAI: Available: 10am, 2pm, 4pm
     
-    NMCAI->>OpenAI: Generate response with options
-    OpenAI->>NMCAI: "I can schedule you for tomorrow at 10am, 2pm, or 4pm. Which works best?"
+    DispatchAI->>OpenAI: Generate response with options
+    OpenAI->>DispatchAI: "I can schedule you for tomorrow at 10am, 2pm, or 4pm. Which works best?"
     
-    NMCAI->>CallService: POST /conversations/ai-reply
+    DispatchAI->>CallService: POST /conversations/{conversationId}/messages
     CallService->>TwilioServer: POST /sms/send
     TwilioServer->>TwilioAPI: Send SMS
     TwilioAPI->>Customer: Time slot options
     
     Customer->>TwilioAPI: SMS: "2pm works"
     TwilioAPI->>TwilioServer: Webhook: message.received
-    TwilioServer->>CallService: POST /conversations/message
-    CallService->>NMCAI: POST /process-message
+    TwilioServer->>CallService: POST /conversations/messages/incoming
+    CallService->>DispatchAI: POST /messages/analyze
     
-    NMCAI->>OpenAI: Confirm appointment details
-    OpenAI->>NMCAI: Extract: time=2pm, date=tomorrow
+    DispatchAI->>OpenAI: Confirm appointment details
+    OpenAI->>DispatchAI: Extract: time=2pm, date=tomorrow
     
-    NMCAI->>UniversalCal: POST /appointments/create
+    DispatchAI->>UniversalCal: POST /appointments
     UniversalCal->>GoogleCal: Create calendar event
     GoogleCal->>UniversalCal: Event created
-    UniversalCal->>NMCAI: Appointment confirmed
+    UniversalCal->>DispatchAI: Appointment confirmed
     
-    NMCAI->>OpenAI: Generate confirmation message
-    OpenAI->>NMCAI: "Perfect! I've scheduled you for tomorrow at 2pm. You'll receive a confirmation shortly."
+    DispatchAI->>OpenAI: Generate confirmation message
+    OpenAI->>DispatchAI: "Perfect! I've scheduled you for tomorrow at 2pm. You'll receive a confirmation shortly."
     
-    NMCAI->>CallService: POST /conversations/ai-reply
+    DispatchAI->>CallService: POST /conversations/{conversationId}/messages
     CallService->>TwilioServer: POST /sms/send
     TwilioServer->>TwilioAPI: Send SMS
     TwilioAPI->>Customer: Confirmation message
     
-    CallService->>ConnectionService: Notify: appointment_scheduled
+    CallService->>ConnectionService: POST /internal/events/broadcast
     ConnectionService->>WebUI: WebSocket: new_appointment
     
     Note over WebUI: Business owner sees new appointment in dashboard
@@ -162,46 +162,37 @@ sequenceDiagram
 sequenceDiagram
     participant Owner as Business Owner
     participant WebUI as web-ui
-    participant ASAuth as as-auth-service
     participant TSAuth as ts-auth-service
     participant TSTenant as ts-tenant-service
     participant TSUser as ts-user-service
-    participant Dashboard as as-dashboard-service
     participant Analytics as as-analytics-core-service
     participant Connection as as-connection-service
     
     Owner->>WebUI: Navigate to dashboard
-    WebUI->>ASAuth: Check existing session
-    ASAuth->>TSAuth: Validate JWT token
+    WebUI->>TSAuth: POST /auth/validate (check existing session)
     
     alt No valid session
-        TSAuth->>ASAuth: Token invalid/expired
-        ASAuth->>WebUI: Redirect to login
+        TSAuth->>WebUI: Token invalid/expired
         WebUI->>Owner: Show login form
         
         Owner->>WebUI: Submit credentials
-        WebUI->>ASAuth: POST /auth/login
-        ASAuth->>TSAuth: POST /auth/authenticate
-        TSAuth->>TSTenant: Validate tenant status
+        WebUI->>TSAuth: POST /auth/login
+        TSAuth->>TSTenant: GET /internal/tenants/{tenantId}/status
         TSTenant->>TSAuth: Tenant active
-        TSAuth->>TSUser: Validate user credentials
+        TSAuth->>TSUser: POST /users/validate
         TSUser->>TSAuth: User valid
-        TSAuth->>ASAuth: Return JWT token
-        ASAuth->>WebUI: Authentication successful
+        TSAuth->>WebUI: Return JWT token + user data
     else Valid session exists
-        TSAuth->>ASAuth: Token valid
-        ASAuth->>WebUI: Authentication confirmed
+        TSAuth->>WebUI: Token valid + user data
     end
     
-    WebUI->>Dashboard: GET /dashboard (with JWT)
-    Dashboard->>TSAuth: Validate request token
-    TSAuth->>Dashboard: Token valid
-    Dashboard->>Analytics: GET /analytics/summary
-    Analytics->>Dashboard: Return metrics data
-    Dashboard->>WebUI: Dashboard layout + data
+    WebUI->>Analytics: GET /analytics/summary (with JWT)
+    Analytics->>TSAuth: POST /auth/validate (internal validation)
+    TSAuth->>Analytics: Token valid
+    Analytics->>WebUI: Return metrics data
     
-    WebUI->>Connection: Establish WebSocket connection
-    Connection->>TSAuth: Validate WebSocket token
+    WebUI->>Connection: Establish WebSocket connection (with JWT)
+    Connection->>TSAuth: POST /auth/validate (WebSocket auth)
     TSAuth->>Connection: Token valid
     Connection->>WebUI: WebSocket connected
     
@@ -289,7 +280,7 @@ sequenceDiagram
     participant WebUI as web-ui
     participant Connection as as-connection-service
     participant CallService as as-call-service
-    participant NMCAI as nmc-ai
+    participant DispatchAI as dispatch-bot-ai
     participant TwilioServer as twilio-server
     participant Customer
     
@@ -303,31 +294,31 @@ sequenceDiagram
     CallService->>WebUI: Return message history
     WebUI->>Owner: Display conversation thread
     
-    Note over Customer,NMCAI: AI is actively conversing with customer
+    Note over Customer,DispatchAI: AI is actively conversing with customer
     
     Customer->>TwilioServer: New SMS message
     TwilioServer->>CallService: POST /conversations/message
-    CallService->>Connection: Notify: new_message
+    CallService->>Connection: POST /internal/events/broadcast: new_message
     Connection->>WebUI: WebSocket: message_update
     WebUI->>Owner: Display new message in real-time
     
-    NMCAI->>CallService: POST /conversations/ai-reply
+    DispatchAI->>CallService: POST /conversations/ai-reply
     CallService->>TwilioServer: POST /sms/send
-    CallService->>Connection: Notify: ai_response
+    CallService->>Connection: POST /internal/events/broadcast: ai_response
     Connection->>WebUI: WebSocket: ai_message
     WebUI->>Owner: Show AI response in real-time
     
     alt Owner decides to take over
         Owner->>WebUI: Click "Take Over Conversation"
-        WebUI->>CallService: POST /conversations/human-takeover
-        CallService->>NMCAI: POST /conversations/deactivate-ai
-        NMCAI->>CallService: AI deactivated
-        CallService->>Connection: Notify: human_active
+        WebUI->>CallService: POST /conversations/{conversationId}/takeover
+        CallService->>DispatchAI: POST /conversations/takeover
+        DispatchAI->>CallService: AI deactivated
+        CallService->>Connection: POST /internal/events/broadcast
         Connection->>WebUI: WebSocket: takeover_confirmed
         WebUI->>Owner: Show "You are now active" indicator
         
         Owner->>WebUI: Type and send message
-        WebUI->>CallService: POST /conversations/reply
+        WebUI->>CallService: POST /conversations/{conversationId}/messages
         CallService->>TwilioServer: POST /sms/send
         TwilioServer->>Customer: Human response
         
@@ -427,18 +418,18 @@ sequenceDiagram
 sequenceDiagram
     participant Customer
     participant TwilioServer as twilio-server
-    participant NMCAI as nmc-ai
+    participant DispatchAI as dispatch-bot-ai
     participant OpenAI as OpenAI API
     
     Customer->>TwilioServer: SMS message
-    TwilioServer->>NMCAI: Process message
-    NMCAI->>OpenAI: Generate response
+    TwilioServer->>DispatchAI: Process message
+    DispatchAI->>OpenAI: Generate response
     
     Note over OpenAI: OpenAI API is down
     
-    OpenAI-->>NMCAI: API Error 503
-    NMCAI->>NMCAI: Switch to fallback templates
-    NMCAI->>TwilioServer: Template response: "Thanks for your message. A team member will respond soon."
+    OpenAI-->>DispatchAI: API Error 503
+    DispatchAI->>DispatchAI: Switch to fallback templates
+    DispatchAI->>TwilioServer: Template response: "Thanks for your message. A team member will respond soon."
     TwilioServer->>Customer: Fallback response
 ```
 

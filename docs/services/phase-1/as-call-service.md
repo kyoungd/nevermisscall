@@ -3,7 +3,7 @@
 ## Service Overview
 
 **Service Name**: as-call-service  
-**Port**: 3103  
+**Port**: 3104  
 **Phase**: 1 - Core Processing  
 **Purpose**: Core business logic hub for call processing, conversation management, and AI coordination  
 
@@ -11,11 +11,11 @@
 
 ### Primary Functions
 - Process missed call events from twilio-server
-- Manage SMS conversation lifecycles
+- Manage SMS conversation lifecycles  
 - Coordinate AI handoff and human takeover
 - Track leads and appointment outcomes
 - Validate service areas and business hours
-- Store conversation history and analytics data
+- Store conversation history and business data
 
 ### Success Criteria
 - Missed calls trigger SMS within 5 seconds
@@ -25,45 +25,66 @@
 - All conversation data is preserved
 - Service area validation prevents out-of-bounds leads
 
+### Service Boundaries (What this service does NOT handle)
+- **Real-time WebSocket connections** → `as-connection-service` (Port 3105)
+- **Health monitoring and service discovery** → `as-infrastructure-service` (Port 3106)  
+- **Alert management and notifications** → `as-alerts-service` (Port 3101)
+- **Analytics processing and KPIs** → `as-analytics-core-service` (Port 3102)
+
 ## Technical Specification
 
 ### Technology Stack
-- **Runtime**: Node.js 18+ with TypeScript 5+
-- **Framework**: Express.js 4+
-- **Database**: PostgreSQL with Prisma ORM
-- **Validation**: Zod for request/response validation
-- **Real-time**: HTTP webhooks + WebSocket events
+- **Runtime**: Python 3.11+
+- **Framework**: FastAPI with Pydantic for API validation  
+- **Database**: PostgreSQL via shared library (asyncpg/SQLAlchemy)
+- **Validation**: Pydantic models with custom validators
+- **HTTP Client**: httpx for service-to-service communication
+- **Testing**: unittest with comprehensive test coverage
+- **Shared Library**: Uses `shared/` for database, config, auth, logging
 
 ### Service Architecture
 
 ```mermaid
 graph TB
-    subgraph "as-call-service (Port 3103)"
+    subgraph "as-call-service (Port 3104)"
         CallController[CallController]
         ConversationController[ConversationController]
         LeadController[LeadController]
         CallService[CallService]
         ConversationService[ConversationService]
         ValidationService[ValidationService]
-        Database[(PostgreSQL<br/>nevermisscall)]
+        SharedDB[Shared Database<br/>Library]
     end
     
-    TwilioServer[twilio-server] --> CallController
+    subgraph "External Services"
+        TwilioServer[twilio-server<br/>Port 3701]
+        DispatchAI[dispatch-bot-ai<br/>Port 3801]
+        TSTenant[ts-tenant-service<br/>Port 3302]
+        ASConnection[as-connection-service<br/>Port 3105]
+    end
+    
+    subgraph "Database"
+        PostgreSQL[(PostgreSQL<br/>nevermisscall)]
+    end
+    
+    TwilioServer --> CallController
     TwilioServer --> ConversationController
-    DispatchAI[dispatch-bot-ai] --> ConversationController
-    WebUI[web-ui] --> ConversationController
-    ASConnection[as-connection-service] --> ConversationController
+    DispatchAI --> ConversationController
     
     CallController --> CallService
     ConversationController --> ConversationService
+    LeadController --> CallService
+    
     CallService --> ValidationService
     ConversationService --> ValidationService
     
-    CallService --> Database
-    ConversationService --> Database
+    CallService --> SharedDB
+    ConversationService --> SharedDB
+    SharedDB --> PostgreSQL
     
-    CallService --> TSTenant[ts-tenant-service]
+    CallService --> TSTenant
     ValidationService --> TSTenant
+    ConversationService --> ASConnection
 ```
 
 ## API Endpoints
@@ -889,7 +910,7 @@ MAX_CONVERSATION_MESSAGES=1000
 SERVICE_AREA_VALIDATION_ENABLED=true
 
 # Service Configuration
-PORT=3103
+PORT=3104
 SERVICE_NAME=as-call-service
 ```
 

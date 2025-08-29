@@ -1,0 +1,4 @@
+1. as-call-service: Create this service based on the documentation of the service name in the root/docs/service/phase-1 folder with .md extension.  Read the entire documents and create this microservice.  If you have any questions, feel free to ask.
+2. as-call-service: Create unit testing for as-call-service. Remember to not over engineer.  As long as we cover the core functions, we should be fine.
+3. as-call-service: Run unit tests.
+4. as-call-service: Review the code and unit tests.  Let me know if the codes are functional and implemented to meet the documentation requirement, and the unit tests gives me good confidence that the implementation is correct.

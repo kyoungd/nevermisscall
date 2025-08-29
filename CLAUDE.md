@@ -53,6 +53,88 @@ Our market is small, so we prioritize simplicity and working functionality over 
 
 This ensures AI-generated code provides genuine business value rather than just passing tests.
 
+## MANDATORY: Shared Library Usage
+
+**CRITICAL REQUIREMENT**: All NeverMissCall microservices MUST use the shared library (`/shared/`) for common functionality. This is the foundation of our architecture and ensures consistency, maintainability, and code reuse across the platform.
+
+### Shared Library Components
+
+The shared library (`/shared/`) provides standardized implementations for:
+
+✅ **Database Operations**: Connection pooling, queries, health checks via `shared.init_database()`, `shared.query()`  
+✅ **Configuration Management**: Environment variables, service ports via `shared.get_common_config()`  
+✅ **Authentication**: Service-to-service API keys via `shared.require_service_auth()`  
+✅ **API Responses**: Standardized success/error formats via `shared.success_response()`, `shared.error_response()`  
+✅ **Logging**: Structured JSON logging with context via `shared.logger`  
+✅ **Validation**: Common validation functions via `shared.validate_*()` functions  
+✅ **Models**: Pydantic models for User, Tenant, Call, etc. via `shared.models`  
+✅ **Utilities**: Helper functions, service client, formatting via `shared.utils`  
+
+### Integration Requirements
+
+**Every microservice implementation MUST:**
+
+1. **Import from shared library first**:
+```python
+from shared import (
+    init_database, query, health_check,
+    get_common_config, logger,
+    success_response, error_response,
+    require_service_auth
+)
+```
+
+2. **Use shared database operations** instead of custom database code
+3. **Use shared authentication** for service-to-service communication  
+4. **Use shared configuration** for environment variables and service ports
+5. **Use shared API responses** for consistent client experience
+6. **Use shared logging** for structured monitoring and debugging
+7. **Use shared validation** for consistent error handling
+
+### Benefits of Shared Library Architecture
+
+🔒 **Consistency**: Identical patterns across all services for database, auth, logging  
+🛠️ **Maintainability**: Infrastructure changes happen in one place  
+🚀 **Development Speed**: Services focus on business logic, not infrastructure  
+🔍 **Debugging**: Consistent logging and error handling  
+📈 **Reliability**: Shared, tested infrastructure code  
+⚡ **Performance**: Optimized database connection pooling and async operations  
+
+### Example Service Structure
+
+```python
+# ✅ CORRECT: Using shared library
+from shared import (
+    init_database, query, logger, 
+    get_common_config, success_response,
+    require_service_auth
+)
+
+@app.on_event("startup")
+async def startup_event():
+    config = get_common_config()
+    await init_database(config.database)
+    logger.info("Service started using shared library")
+
+@app.post("/internal/resource")  
+async def create_resource(
+    data: ResourceCreate,
+    _: bool = Depends(require_service_auth)
+):
+    result = await query("INSERT INTO ...", params)
+    return success_response(result, "Resource created")
+```
+
+**❌ INCORRECT: Custom implementations that duplicate shared library functionality**
+
+### Documentation Reference
+
+- **Shared Library Documentation**: `/shared/README.md`
+- **API Integration Patterns**: `/docs/services/phase-1/api-integration-patterns.md`
+- **Authentication Standards**: `/docs/services/phase-1/authentication-standards.md`
+
+**Remember**: The shared library exists to eliminate code duplication and ensure platform consistency. Always use it instead of implementing custom solutions for common functionality.
+
 ## Phase 1 Service Architecture
 
 **Total Services**: 13+ services (comprehensive NeverMissCall platform)
