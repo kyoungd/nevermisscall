@@ -41,10 +41,12 @@ Use **two bounded contexts** inside one process + one Postgres:
 
 **Aggregates & Boundaries**
 
-* **Conversation (AR)** — owns state machine, messages; single transaction for state + outbound intent.
-  Invariants: one Active per `(tenant, caller)` at a time; opt‑out blocks outbound; auto‑reply must start ≤5s after missed call.
-* **MessagingEndpoint (AR)** — phone number + compliance (brand/campaign/opt‑out).
-  Invariants: must be Verified to send; idempotent sends via `clientMessageId`.
+* **Conversation (AR)** — owns state machine, messages; single transaction for state; outbound SMS is sent after commit (no outbox in MVP; introduce outbox if/when durable async consumers are added).
+  Invariants: one open conversation per (tenant, caller).
+  SLO: auto-reply should start ≤5s after missed call.
+* **Messaging Endpoint (AR)** — phone number + compliance (brand/campaign/opt-out).
+  Invariants: send allowed only if Verified AND not opted-out; idempotent via clientMessageId.
+  Behavior: if opted-out, return ERROR: OPTED_OUT (internal). Public API may map to HTTP 403.
 * **Reservation (AR)** — holds exactly one Slot with TTL; expires automatically.
 * **Appointment (AR)** — confirmed booking; **no overlaps** for `(tenant, resource, time-range)`.
   Boundary: Appointment creation consumes a live Reservation atomically.
@@ -68,7 +70,7 @@ Use **two bounded contexts** inside one process + one Postgres:
 **Decision**
 
 * Single **Postgres** with schemas: `conversation.*`, `fulfillment.*`.
-* Enforce no‑overlap via `EXCLUDE USING GIST (tenant_id, resource_id, tstzrange(start,end) WITH &&)` on `fulfillment.appointments`.
+* Enforce no-overlap via `EXCLUDE USING GIST (tenant_id WITH =, resource_id WITH =, tstzrange(starts_at, ends_at, '[)') WITH &&) on fulfillment.appointments`.
 * Strong consistency **inside** each aggregate; **eventual** across contexts.
 
 **Consequences / Trade‑offs**
@@ -136,7 +138,7 @@ Use **two bounded contexts** inside one process + one Postgres:
 
 **Decision**
 
-* **Shared schema** with `tenant_id` column everywhere; all unique/foreign keys scoped by `tenant_id`.
+* **Shared database, separate schemas per context** every table has a `tenant_id` column; all unique/foreign keys are scoped by `tenant_id`.
 * App‑level policy: no data read/write without tenant context.
 
 **Consequences / Trade‑offs**

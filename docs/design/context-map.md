@@ -11,7 +11,6 @@
 ```mermaid
 flowchart LR
   subgraph EXT[External]
-    CARRIER[(Telephony Carrier/PBX)]
     CPaaSRef[(SMS Aggregator/CPaaSRef)]
     GOOGLE[(Google Calendar)]
     JOBBER[(Jobber API)]
@@ -22,25 +21,25 @@ flowchart LR
       CC_CORE[Conversation & Comms Core]
       COMMS[Comms Adapter (Telephony/SMS)]
     end
-    subgraph FULF[Fulfillment Core (Scheduling + Booking)]
+    subgraph FULF[Fulfillment Core (Scheduling + Appointments)]
       FULF_CORE[Fulfillment Core]
       INTEG[Integrations Adapter (Calendar)]
     end
   end
 
   %% External intake
-  CARRIER -->|Webhook: missed call| COMMS
+  CPaaSRef -->|Webhook: missed call| COMMS
 
   %% Conversation loop
   CC -.->|sendSMS| COMMS
-  COMMS -->|inbound SMS / delivery| CC
+  COMMS -.->|inbound SMS / delivery| CC
 
-  %% Quote & offers (in-process reads)
-  CC -->|Request slots & hold| FULF
-  FULF -->|Slots/Quote projections| CC
+  %% Quote & offers — in-process calls
+  CC -.->|projectAvailability(criteria): Slots[]| FULF
+  CC -.->|createReservation(slotId): ReservationId| FULF
 
   %% Calendar sync
-  FULF -->|Sync appointment| INTEG
+  FULF -.->|Sync appointment| INTEG
   INTEG -->|ACL| GOOGLE
   INTEG -->|ACL| JOBBER
 
@@ -61,8 +60,8 @@ flowchart LR
 ### 1) Conversation & Comms (Conversations + Quote)
 
 **Purpose**: Own the conversation state machine and the ≤5s auto-SMS promise. Compute quotes using local rules/read-models.
-**Owns**: `Conversation`, `Message`, `MessagingEndpoint`, `Policy Snapshot`, `Quote` (read model).
-**APIs (internal)**: `sendAutoReply(call)`, `handleInboundSms(msg)`, `proposeOptions(criteria)`.
+**Owns**: `Conversation`, `Message`, `Messaging Endpoint`, `Policy Snapshot`, `Quote` (read model).
+**APIs (internal)**: `sendAutoReply(call)`, `handleInboundSms(msg)`, `projectAvailability(criteria)`.
 **Integration**: Calls **Comms Adapter** for SMS. Reads **Fulfillment** projections; issues `createReservation()` and `confirmAppointment()` commands.
 
 ### 2) Fulfillment Core (Scheduling + Booking)
@@ -74,7 +73,7 @@ flowchart LR
 
 ### Adapter: Comms (Telephony/SMS)
 
-**Purpose**: Single adapter to the CPaaSRef and telephony webhooks. Centralize rate limiting. **Compliance decisions are enforced by `MessagingEndpoint` in the domain; the adapter records deliveries & signatures.**
+**Purpose**: Single adapter to the CPaaSRef and telephony webhooks. Centralize rate limiting. **Compliance decisions are enforced by `Messaging Endpoint` in the domain; the adapter records deliveries & signatures.**
 **Persists**: `MessageDelivery` (idempotent send records, delivery receipts), webhook envelopes.
 **APIs**: `sendSms(clientMessageId, to, body) → messageId` (idempotent). Webhook handlers for missed calls & inbound SMS.
 **Integration**: Conformist to CPaaSRef; forwards inbound events to **Conversation & Comms**.
@@ -122,7 +121,7 @@ flowchart LR
 
 ## Operational Minimalism
 
-* **SLI**: P95 auto-SMS ≤ 5s (call end → SMS POST). Keep hot path: Carrier → **Comms Adapter** → **Conversation & Comms** → **Comms Adapter** → CPaaSRef.
+* **SLI**: P95 auto-SMS ≤ 5s (call end → SMS POST). Keep hot path: CPaaSRef → **Comms Adapter** → **Conversation & Comms** → **Comms Adapter** → CPaaSRef.
 * **Resilience**: Library-level retries/timeouts; no mesh. Idempotency keys for SMS send & booking.
 * **Observability**: One tracer; correlationId on every call; 3 dashboards (auto-SMS latency, booking success rate, delivery failures).
 
@@ -142,5 +141,3 @@ flowchart LR
 * CPaaSRef throughput/compliance becomes a bottleneck → split **Comms Adapter**.
 * Calendar sync errors/backlog impact bookings → split **Integrations Adapter**.
 * Conversation experiments cause deploy friction → split **Conversation & Comms**.
-
-## Conversation & Comms (incl. Comms adapter)” and “Fulfillment (incl. Integrations adapter)”.

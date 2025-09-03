@@ -22,7 +22,7 @@ flowchart LR
   A -->|send SMS| CPaaSRef
   A <-->|commands/queries| B
   B -->|provider API| CAL[(Calendar Provider)]
-````
+```
 
 ---
 
@@ -45,7 +45,7 @@ flowchart LR
 
 * **Key business rules**: 60s human override timer; detect emergency keywords; throttle message bursts per tenant.
 
-**MessagingEndpoint (AR)**
+**Messaging Endpoint (AR)**
 
 * **Identity**: `(tenantId, phoneNumber)`
 * **Invariants**:
@@ -62,7 +62,7 @@ flowchart LR
 | `ConversationOpened`       | First touch after missed call        | Conversation         | Analytics (optional)                          |
 | `AutoReplySent`            | First outbound SMS accepted by CPaaSRef | Conversation         | Analytics (optional)                          |
 | `MessageDeliveryUpdated`   | Delivery status callback from CPaaSRef  | Conversation         | None (internal update)                        |
-| `ComplianceOptOutReceived` | Inbound STOP/UNSUBSCRIBE             | MessagingEndpoint    | Conversation (to close), Analytics (optional) |
+| `ComplianceOptOutReceived` | Inbound STOP/UNSUBSCRIBE             | Messaging Endpoint    | Conversation (to close), Analytics (optional) |
 
 **Event Schemas (JSON, v1)**
 *All events support an optional `correlationId` that is **propagated unchanged end-to-end** when present.*

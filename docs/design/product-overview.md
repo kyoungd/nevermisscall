@@ -33,13 +33,12 @@
 * One-click takeover from AI to human agents
 * Conversation history preserved during handoffs
 * Real-time conversation monitoring and intervention
-* Role-based access for different team members
 
 ### 📅 **Service Catalog & Scheduling**
 
 * **Catalog (service items & pricing)**: Business-specific list of services with custom pricing and duration
 * **Instant Price Quotes**: AI provides immediate quotes during customer conversations
-* **Scheduling module**: Books appointments with correct time blocks based on service duration (**No Double-Booking**, see ADR-0002)
+* **Scheduling module**: Books appointments with correct time blocks based on service duration (**No Double-Booking**, see ADR-0003)
 * **Calendar Integration**: Direct sync with Jobber and Google Calendar
 * **Fast Availability:** uses a local projection refreshed within ~1s; avoids double-booking.
 
